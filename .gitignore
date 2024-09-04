@@ -1,0 +1,32 @@
+.cache
+.DS_Store
+.well-known
+
+# app
+__pycache__
+
+# build
+.ci-task-runner-cache.json
+dist*
+
+# docs
+docs
+
+# IDE
+.idea
+.vscode
+
+*.sublime-project
+*.sublime-workspace
+
+sftp-config.json
+sftp-settings.json
+
+
+# agentx
+agentx-conf.json
+
+# node
+node_modules
+npm-debug.log
+.env
