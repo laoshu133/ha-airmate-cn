@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
-from .coordinator import Coordinator
+# from .coordinator import Coordinator
 
 PLATFORMS: list[Platform] = [Platform.LOCK]
 
