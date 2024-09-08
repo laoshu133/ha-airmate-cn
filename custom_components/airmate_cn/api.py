@@ -2,12 +2,10 @@
 
 import asyncio
 from collections import defaultdict
-from dataclasses import dataclass
-import datetime
 
-# from hashlib import md5
+# from dataclasses import dataclass
+import datetime
 import logging
-import time
 
 # import math
 from typing import collections
@@ -22,6 +20,7 @@ from .api_utils import (
     AuthError,
     anonymize_response,
     handle_httpstatuserror,
+    sign_request,
 )
 from .const import (
     DEFAULT_API_HOST,
@@ -45,6 +44,7 @@ class APIAuth(httpx.Auth):
         self,
         username: str,
         password: str,
+        api_config: dict | None = None,
         access_token: str | None = None,
         refresh_token: str | None = None,
         refresh_url: str | None = None,
@@ -52,6 +52,8 @@ class APIAuth(httpx.Auth):
         """Initialize the auth."""
 
         self._lock: asyncio.Lock | None = None
+        self.api = API(**api_config)
+
         self.expires_at: datetime.datetime | None = None
         self.refresh_url = refresh_url or "/auth/refresh"
         self.refresh_token = refresh_token
@@ -128,6 +130,8 @@ class APIAuth(httpx.Auth):
         if not token_data:
             token_data = await self._login()
 
+        _LOGGER.info("TOKEN_DATA: %s", token_data)
+
         token_data["expires_at"] = token_data["expires_at"] - EXPIRES_AT_OFFSET
 
         self.refresh_token = token_data["refresh_token"]
@@ -136,23 +140,22 @@ class APIAuth(httpx.Auth):
 
     async def _refresh_token(self) -> dict:
         """Refresh the OAuth token."""
-        async with API() as api:
-            _LOGGER.debug("Refreshing token")
+        _LOGGER.debug("Refreshing token")
 
-            current_utc_time = datetime.datetime.now(tz=datetime.UTC)
+        current_utc_time = datetime.datetime.now(tz=datetime.UTC)
 
-            # Get token
-            response = await api.post(
-                "/auth/refresh",
-                headers={},
-                json={
-                    "refresh_token": self.refresh_token,
-                },
-            )
-            response_json = response.json()["data"]
+        # Get token
+        response = await self.api.post(
+            "/api/v1/user/refresh_token",
+            headers={},
+            json={
+                "refresh_token": self.refresh_token,
+            },
+        )
+        response_json = response.json()["data"]
 
-            expiration_time = int(response_json["expires_in"])
-            expires_at = current_utc_time + datetime.timedelta(seconds=expiration_time)
+        expiration_time = int(response_json["expires_in"])
+        expires_at = current_utc_time + datetime.timedelta(seconds=expiration_time)
 
         return {
             "refresh_token": response_json["refresh_token"],
@@ -162,28 +165,46 @@ class APIAuth(httpx.Auth):
 
     async def _login(self) -> dict:
         """Get a valid OAuth token."""
-        async with API() as api:
-            _LOGGER.debug("Authenticating")
+        _LOGGER.debug("Authenticating")
 
-            # Get token
-            response = await api.post(
-                "/auth/login",
-                headers={},
-                json={
-                    "username": self.username,
-                    "password": self.password,
-                },
-            )
-            response_json = response.json()["data"]
+        # Get token
+        # response = await self.api.post(
+        #     "/api/v1/user/login",
+        #     headers={},
+        #     json={
+        #         "username": self.username,
+        #         "password": self.password,
+        #     },
+        # )
+        # response_json = response.json()["data"]
 
-            decoded_token = jwt.decode(
-                response_json["access_token"],
-                algorithms=["HS256"],
-                options={"verify_signature": False},
-            )
-            expires_at = (
-                datetime.datetime.fromtimestamp(decoded_token["exp"], tz=datetime.UTC),
-            )
+        # For testing
+        response_json = {
+            "request_id": "2130b7f8856b400b82de083ac9c752b0",
+            "code": 200,
+            "msg": "success",
+            "err_msg": "",
+            "data": {
+                "id": 18023,
+                "username": "13534093774",
+                "uid": "a29f7ba3a91346519fcd8fee4e50468b",
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGlhcyI6IjFiNGYwMTYyMWU5YjRhY2E4MzMyNDJhMzQ2OTFjNTExIiwiZXhwIjoxNzI2MjA1NDY0LCJpYXQiOjE3MjU1NTc0NjQsIm4iOjE3MjU1NTc0NjQwNjM3NDMyNjUsInVzZXJpZCI6ImEyOWY3YmEzYTkxMzQ2NTE5ZmNkOGZlZTRlNTA0NjhiIiwidXNlcm5hbWUiOiIxMzUzNDA5Mzc3NCJ9.6tJJ_jVTdn-PBbC0R63fU2zO0jqZj54FSY_0zHG44Ys",
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGlhcyI6IjFiNGYwMTYyMWU5YjRhY2E4MzMyNDJhMzQ2OTFjNTExIiwiZXhwIjoxNzI4MTQ5NDY0LCJpYXQiOjE3MjU1NTc0NjQsIm4iOjE3MjU1NTc0NjQwNjM3NDMyNjUsInVzZXJpZCI6ImEyOWY3YmEzYTkxMzQ2NTE5ZmNkOGZlZTRlNTA0NjhiIiwidXNlcm5hbWUiOiIxMzUzNDA5Mzc3NCJ9.4_Y3uJPe8oSewtCHvS8SKDcpKFyjTgeF4Q8mbBgXWj4",
+                "alias": "1b4f01621e9b4aca833242a34691c511",
+            },
+        }
+
+        response_json = response_json["data"]
+
+        decoded_token = jwt.decode(
+            response_json["access_token"],
+            algorithms=["HS256"],
+            options={"verify_signature": False},
+        )
+
+        expires_at = datetime.datetime.fromtimestamp(
+            decoded_token["exp"], tz=datetime.UTC
+        )
 
         return {
             "refresh_token": response_json["refresh_token"],
@@ -197,6 +218,9 @@ class API(httpx.AsyncClient):
 
     def __init__(
         self,
+        app_id: str = "",
+        app_key: str = "",
+        app_secret: str = "",
         msg_base_url: str | None = DEFAULT_MSG_API_HOST,
         enable_log_responses: bool = False,
         ssl_verify_pem: str | None = None,
@@ -206,6 +230,9 @@ class API(httpx.AsyncClient):
     ) -> None:
         """Initialize the API."""
 
+        self.app_id = app_id
+        self.app_key = app_key
+        self.app_secret = app_secret
         self.msg_base_url = msg_base_url
         self.enable_log_responses = enable_log_responses
         self.ssl_verify_pem = ssl_verify_pem
@@ -231,6 +258,13 @@ class API(httpx.AsyncClient):
 
         # Register event hooks
         kwargs["event_hooks"] = defaultdict(list, **kwargs.get("event_hooks", {}))
+
+        # Hook request for sign and timestamp
+        async def sign_request_event_handler(request: httpx.Request):
+            """Event handler that signs requests."""
+            sign_request(self, request)
+
+        kwargs["event_hooks"]["request"].append(sign_request_event_handler)
 
         # Event hook for logging content
         async def log_response(response: httpx.Response):
@@ -267,7 +301,7 @@ class API(httpx.AsyncClient):
                     )
 
                 raise APIError(
-                    response=response, request=None, message=json_data["desc"]
+                    response=response, request=None, message=json_data["msg"]
                 )
 
         kwargs["event_hooks"]["response"].append(raise_for_status_event_handler)
@@ -278,12 +312,8 @@ class API(httpx.AsyncClient):
         """Generate a header for HTTP requests to the server."""
 
         headers = {
-            "user-agent": X_USER_AGENT,
             "ts": str(int(datetime.datetime.now().timestamp())),
-            # "sn": "2bcc8819e83ad16e39bc0be03736c9d9",
-            "app_key": "da88885bc39740e2952f01d2a884ed98",
-            "app_id": "30002",
-            # "appid": "30002",
+            "user-agent": X_USER_AGENT,
         }
 
         if data:
@@ -291,16 +321,88 @@ class API(httpx.AsyncClient):
 
         return headers
 
-    async def get_device_list(self) -> dict:
+    async def get_devices(self) -> list:
         """Get device list."""
-        return await self.post(
-            self.msg_base_url + "/message_center/api/v1/app/shadow/devices",
-            json={
-                "list": [
-                    {
-                        "device_id": "9dbfd5e1fc9b413cbf70bb531b972d41",
-                        "product_key": "0n78whI",
-                    }
-                ]
-            },
+
+        house = await self.get_default_house()
+        rooms = await self.get_rooms(house["house_id"])
+
+        # await self.post(
+        #     self.msg_base_url + "/message_center/api/v1/app/shadow/devices",
+        #     json={
+        #         "list": [
+        #             {
+        #                 "device_id": "9dbfd5e1fc9b413cbf70bb531b972d41",
+        #                 "product_key": "0n78whI",
+        #             }
+        #         ]
+        #     },
+        # )
+
+        devices = []
+        for room in rooms:
+            dev_list = isinstance(room["list"], list) and room["list"] or []
+
+            for dev in dev_list:
+                dev["room_id"] = room["id"]
+                dev["room_name"] = room["name"]
+                dev["house_name"] = house["name"]
+                dev["house_id"] = house["house_id"]
+
+                devices.append(dev)
+
+        # 过滤离线设备
+        # 当前仅支持空气循环扇
+        # https://item.jd.com/100019232964.html
+        # Filter devices without model == gryfy and online == 0
+        devices = [
+            dev for dev in devices if dev["model"] == "gryfy" and dev["online"] == 0
+        ]
+
+        return devices  # noqa: RET504
+
+    async def get_rooms(self, id: str | int) -> dict:
+        """Get room list."""
+
+        res = await self.get(f"/api/v1/house/{id}/room")
+
+        return res.json()["data"]["room_list"]
+
+    async def get_default_house(self) -> dict:
+        """Get default house."""
+        res = await self.get("/api/v1/house")
+        house_list = res.json()["data"]["list"]
+
+        default_house = next(
+            (house for house in house_list if house["label"] == "default"), None
         )
+
+        if not default_house:
+            default_house = house_list[0]
+
+        if not default_house:
+            raise APIError("No default house found")
+
+        return default_house
+
+    async def test_sign(self) -> list:
+        """Test sign."""
+
+        # json = {
+        #     "auth_code": "",
+        #     "username": "13534093774",
+        #     "password": "FLZAfG9LVyrsMTB",
+        # }
+        # req = httpx.Request("POST", "/api/v1/user/login", json=json)
+
+        headers = {
+            "ts": "1725557465",
+            "app_key": "da88885bc39740e2952f01d2a884ed98",
+        }
+        req = httpx.Request("GET", "/api/v1/house", headers=headers)
+
+        ret = sign_request(self, req)
+
+        _LOGGER.info("RET: %s", ret)
+
+        return ret["sn"]

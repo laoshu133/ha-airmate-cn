@@ -3,6 +3,8 @@
 from collections import deque
 from dataclasses import dataclass
 import datetime
+from hashlib import md5
+import io
 import json
 import logging
 import mimetypes
@@ -24,7 +26,7 @@ class APIError(Exception):
     """General API error."""
 
     def __init__(
-        self, message: str, rawHttpXError: httpx.HTTPStatusError | None = None
+        self, message: str, *, response: httpx.Response, request: httpx.Request | None
     ) -> None:
         """Initialize the API error."""
         super().__init__(message)
@@ -104,6 +106,98 @@ async def handle_httpstatuserror(
 
     if not dont_raise:
         raise _ex_to_raise(ex)
+
+
+def sign_request(api: httpx.AsyncClient, request: httpx.Request) -> httpx.Request:
+    """Sign a request."""
+
+    param_map = {}
+
+    _LOGGER.info("X1: %s", request.headers)
+    _LOGGER.info("X2: %s", request.headers.get("Content-Type"))
+
+    # Add body
+    if request.headers.get("Content-Type") == "application/json":
+        body_str = request_body_to_string(request)
+        if body_str:
+            param_map["body"] = body_str
+
+    # Add app_key
+    param_map["app_key"] = "da88885bc39740e2952f01d2a884ed98"
+
+    # Add timestamp
+    param_map["ts"] = request.headers.get("ts") or str(
+        int(datetime.datetime.now().timestamp())
+    )
+
+    # Add Authorization
+    if request.headers.get("Authorization"):
+        param_map["Authorization"] = request.headers["Authorization"]
+
+    # Sign the data
+    sn = sign_data(param_map, api.app_secret)
+    param_map["sn"] = sn
+
+    # Update headers
+    request.headers["app_id"] = api.app_id
+    request.headers["app_key"] = api.app_key
+    request.headers["ts"] = param_map["ts"]
+    request.headers["sn"] = sn
+
+    return param_map
+
+
+def sign_data(data: dict, secret: str) -> str:
+    """Sign data with a secret key."""
+
+    hash_map = {}
+
+    if data and len(data) > 0:
+        for key, value in data.items():
+            if isinstance(value, list):
+                hash_map[key] = json.dumps(value)
+            else:
+                hash_map[key] = value
+
+    # Sort keys
+    sorted_keys = sorted(hash_map.keys())
+
+    # Create param string
+    param_string = "&".join(f"{key}={hash_map[key]}" for key in sorted_keys)
+
+    # Add secret
+    final_string = f"{param_string}&{secret}"
+
+    _LOGGER.info("Final string: %s", final_string)
+
+    return md5(final_string.encode()).hexdigest()
+
+
+def request_body_to_string(request: httpx.Request) -> str:
+    """Convert the request body to a string."""
+
+    content = request.content
+
+    if content is None:
+        return ""
+
+    try:
+        if isinstance(content, bytes):
+            return content.decode("utf-8")
+
+        if isinstance(content, (str, int, float, bool)):
+            return str(content)
+
+        # Read the stream
+        buffer = io.BytesIO()
+        for chunk in request.stream():
+            buffer.write(chunk)
+
+        return buffer.getvalue().decode("utf-8")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Error converting request body to string: %s", e)
+
+        return ""
 
 
 # Cache response content for logging.
