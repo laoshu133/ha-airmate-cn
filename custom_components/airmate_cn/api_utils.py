@@ -111,10 +111,20 @@ async def handle_httpstatuserror(
 def sign_request(api: httpx.AsyncClient, request: httpx.Request) -> httpx.Request:
     """Sign a request."""
 
-    param_map = {}
+    is_msg_api = "api-life-msg" in request.url.host
 
-    _LOGGER.info("X1: %s", request.headers)
-    _LOGGER.info("X2: %s", request.headers.get("Content-Type"))
+    # Add base headers
+    request.headers["app_key"] = api.app_key
+
+    # Add app_id if it is msg API
+    if is_msg_api:
+        request.headers["app_id"] = api.app_id
+
+    # Add timestamp
+    if not request.headers.get("ts"):
+        request.headers["ts"] = str(int(datetime.datetime.now().timestamp()))
+
+    param_map = {}
 
     # Add body
     if request.headers.get("Content-Type") == "application/json":
@@ -122,30 +132,19 @@ def sign_request(api: httpx.AsyncClient, request: httpx.Request) -> httpx.Reques
         if body_str:
             param_map["body"] = body_str
 
-    # Add app_key
-    param_map["app_key"] = "da88885bc39740e2952f01d2a884ed98"
-
-    # Add timestamp
-    param_map["ts"] = request.headers.get("ts") or str(
-        int(datetime.datetime.now().timestamp())
-    )
-
-    # Add Authorization
-    if request.headers.get("Authorization"):
-        param_map["Authorization"] = request.headers["Authorization"]
+    # Sign keys
+    sign_keys = ["app_id", "app_key", "ts", "Authorization"]
+    for key in sign_keys:
+        if request.headers.get(key):
+            param_map[key] = request.headers[key]
 
     # Sign the data
     sn = sign_data(param_map, api.app_secret)
-    param_map["sn"] = sn
 
-    # Update headers
-    request.headers["app_id"] = api.app_id
-    request.headers["app_key"] = api.app_key
-    request.headers["ts"] = param_map["ts"]
+    # Add sn to headers
     request.headers["sn"] = sn
 
-    return param_map
-
+    return request
 
 def sign_data(data: dict, secret: str) -> str:
     """Sign data with a secret key."""
@@ -167,8 +166,6 @@ def sign_data(data: dict, secret: str) -> str:
 
     # Add secret
     final_string = f"{param_string}&{secret}"
-
-    _LOGGER.info("Final string: %s", final_string)
 
     return md5(final_string.encode()).hexdigest()
 

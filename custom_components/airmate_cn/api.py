@@ -168,33 +168,15 @@ class APIAuth(httpx.Auth):
         _LOGGER.debug("Authenticating")
 
         # Get token
-        # response = await self.api.post(
-        #     "/api/v1/user/login",
-        #     headers={},
-        #     json={
-        #         "username": self.username,
-        #         "password": self.password,
-        #     },
-        # )
-        # response_json = response.json()["data"]
-
-        # For testing
-        response_json = {
-            "request_id": "2130b7f8856b400b82de083ac9c752b0",
-            "code": 200,
-            "msg": "success",
-            "err_msg": "",
-            "data": {
-                "id": 18023,
-                "username": "13534093774",
-                "uid": "a29f7ba3a91346519fcd8fee4e50468b",
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGlhcyI6IjFiNGYwMTYyMWU5YjRhY2E4MzMyNDJhMzQ2OTFjNTExIiwiZXhwIjoxNzI2MjA1NDY0LCJpYXQiOjE3MjU1NTc0NjQsIm4iOjE3MjU1NTc0NjQwNjM3NDMyNjUsInVzZXJpZCI6ImEyOWY3YmEzYTkxMzQ2NTE5ZmNkOGZlZTRlNTA0NjhiIiwidXNlcm5hbWUiOiIxMzUzNDA5Mzc3NCJ9.6tJJ_jVTdn-PBbC0R63fU2zO0jqZj54FSY_0zHG44Ys",
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGlhcyI6IjFiNGYwMTYyMWU5YjRhY2E4MzMyNDJhMzQ2OTFjNTExIiwiZXhwIjoxNzI4MTQ5NDY0LCJpYXQiOjE3MjU1NTc0NjQsIm4iOjE3MjU1NTc0NjQwNjM3NDMyNjUsInVzZXJpZCI6ImEyOWY3YmEzYTkxMzQ2NTE5ZmNkOGZlZTRlNTA0NjhiIiwidXNlcm5hbWUiOiIxMzUzNDA5Mzc3NCJ9.4_Y3uJPe8oSewtCHvS8SKDcpKFyjTgeF4Q8mbBgXWj4",
-                "alias": "1b4f01621e9b4aca833242a34691c511",
+        response = await self.api.post(
+            "/api/v1/user/login",
+            headers={},
+            json={
+                "username": self.username,
+                "password": self.password,
             },
-        }
-
-        response_json = response_json["data"]
+        )
+        response_json = response.json()["data"]
 
         decoded_token = jwt.decode(
             response_json["access_token"],
@@ -385,24 +367,3 @@ class API(httpx.AsyncClient):
 
         return default_house
 
-    async def test_sign(self) -> list:
-        """Test sign."""
-
-        # json = {
-        #     "auth_code": "",
-        #     "username": "13534093774",
-        #     "password": "FLZAfG9LVyrsMTB",
-        # }
-        # req = httpx.Request("POST", "/api/v1/user/login", json=json)
-
-        headers = {
-            "ts": "1725557465",
-            "app_key": "da88885bc39740e2952f01d2a884ed98",
-        }
-        req = httpx.Request("GET", "/api/v1/house", headers=headers)
-
-        ret = sign_request(self, req)
-
-        _LOGGER.info("RET: %s", ret)
-
-        return ret["sn"]
