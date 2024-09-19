@@ -303,42 +303,79 @@ class API(httpx.AsyncClient):
 
         return headers
 
-    async def get_devices(self) -> list:
+    async def get_tokens(self) -> dict[str, str] | None:
+        """Get tokens."""
+
+        auth = self.auth
+
+        if auth and isinstance(auth, APIAuth):
+            if not auth.access_token:
+                await auth.login()
+
+            return {
+                "access_token": self.auth.access_token,
+                "refresh_token": self.auth.refresh_token,
+            }
+
+        return None
+
+    async def get_devices(self) -> list[dict]:
         """Get device list."""
 
         house = await self.get_default_house()
         rooms = await self.get_rooms(house["house_id"])
-
-        # await self.post(
-        #     self.msg_base_url + "/message_center/api/v1/app/shadow/devices",
-        #     json={
-        #         "list": [
-        #             {
-        #                 "device_id": "9dbfd5e1fc9b413cbf70bb531b972d41",
-        #                 "product_key": "0n78whI",
-        #             }
-        #         ]
-        #     },
-        # )
 
         devices = []
         for room in rooms:
             dev_list = isinstance(room["list"], list) and room["list"] or []
 
             for dev in dev_list:
+                # Device schema
+                # {
+                #     "icon": "https://app-server-test-1257124021.cos.ap-guangzhou.myqcloud.com/product/1615948465_WSPyr4.png",
+                #     "name": "",
+                #     "online": 0,
+                #     "owner_id": "",
+                #     "product_key": "",
+                #     "model": "gryfy",
+                #     "product_name": "CA23-AD58/59",
+                #     "device_type": 1,
+                #     "product_template_key": "",
+                #     "create_time": 1714905206,
+                #     "version": "",
+                #     "mac": "",
+                #     "ip": "",
+                #     "device_id": "",
+                #     "label": "master",
+                #     "ui_version": "",
+                #     "platform": "xiot",
+                #     "bd_addr": "",
+                #     "mesh_json": "",
+                #     "sort": 1714905206,
+                #     "is_virtual_device": false,
+                #     "extend_info": null,
+                # }
                 dev["room_id"] = room["id"]
                 dev["room_name"] = room["name"]
                 dev["house_name"] = house["name"]
                 dev["house_id"] = house["house_id"]
+
+                # Add ext attrs
+                dev["type"] = "fan" if dev["model"] == "gryfy" else dev["model"]
+                dev["brand_name"] = "AirMate"
+
+                # Add default states
+                dev["online_status"] = 0
+                dev["dp_status"] = {}
+                dev["base_info"] = {}
 
                 devices.append(dev)
 
         # 过滤离线设备
         # 当前仅支持空气循环扇
         # https://item.jd.com/100019232964.html
-        # Filter devices without model == gryfy and online == 0
         devices = [
-            dev for dev in devices if dev["model"] == "gryfy" and dev["online"] == 0
+            dev for dev in devices if dev["type"] == "fan" and dev["online"] == 0
         ]
 
         return devices  # noqa: RET504
@@ -367,3 +404,38 @@ class API(httpx.AsyncClient):
 
         return default_house
 
+    async def fetch_devices_state(self, dev_list: list[dict]) -> list[dict]:
+        """Fetch devices state from API."""
+
+        # States schema
+        # [{
+        #     "product_key": "",
+        #     "device_id": "",
+        #     "dp_status": {
+        #         "downshift": 17,
+        #         "failure": 0,
+        #         "filter_life": 0,
+        #         "horizontal_swing": 3,
+        #         "light": 0,
+        #         "mode": 0,
+        #         "mute": 0,
+        #         "power_switch": 1,
+        #         "vertical_swing": 0,
+        #         "wind_mode": 0,
+        #     },
+        #     "online_status": 1,
+        #     "base_info": {
+        #         "active_ip": "",
+        #         "active_time": "1657896751575",
+        #         "firmware_version": "1.0.4",
+        #         "ip": "",
+        #         "is_active": "1",
+        #         "last_online_time": "1725357987450",
+        #         "mac": "",
+        #         "online_status": "1",
+        #     },
+        # }]
+        return await self.post(
+            self.msg_base_url + "/message_center/api/v1/app/shadow/devices",
+            json={"list": dev_list},
+        )

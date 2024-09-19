@@ -1,0 +1,16 @@
+{
+  "domain": "airmate_cn",
+  "name": "AirMate CN",
+  "version": "0.1.0",
+  "codeowners": [
+    "@laoshu133"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/laoshu133/airmate_cn",
+  "homekit": {},
+  "iot_class": "assumed_state",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": []
+}

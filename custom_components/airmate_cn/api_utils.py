@@ -48,7 +48,7 @@ def anonymize_data(json_data: list | dict) -> list | dict:
 
 def anonymize_response(response: httpx.Response) -> AnonymizedResponse:
     """Anonymize a responses URL and content."""
-    brand = "xiaotu"
+    brand = "API"
 
     url_parts = response.url.path.split("/")[1:]
     url_path = "_".join(url_parts)
