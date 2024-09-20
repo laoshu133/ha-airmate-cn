@@ -19,6 +19,8 @@ class BaseEntity(CoordinatorEntity[Coordinator]):
 
     _attr_has_entity_name = True
 
+    model: DeviceModel
+
     def __init__(
         self,
         coordinator: Coordinator,
@@ -40,9 +42,16 @@ class BaseEntity(CoordinatorEntity[Coordinator]):
             name=model.name,
         )
 
-        _LOGGER.info("Entity.setup_device_info: %s", self._attr_device_info)
+        _LOGGER.info(
+            "Entity.setup_device: %s - %s", self._attr_unique_id, self._attr_device_info
+        )
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
         await super().async_added_to_hass()
         self._handle_coordinator_update()
+
+    @property
+    def account(self):
+        """Return account."""
+        return self.coordinator.account

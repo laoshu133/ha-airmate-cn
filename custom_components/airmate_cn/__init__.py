@@ -12,7 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 from .coordinator import Coordinator
 
-PLATFORMS: list[Platform] = [Platform.LOCK]
+PLATFORMS: list[Platform] = [Platform.FAN, Platform.SELECT, Platform.SWITCH]
 
 _LOGGER = logging.getLogger(__name__)
 

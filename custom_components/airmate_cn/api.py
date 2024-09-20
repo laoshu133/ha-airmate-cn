@@ -29,10 +29,10 @@ from .const import (
     HTTPX_TIMEOUT,
     X_USER_AGENT,
 )
+from .dao import DeviceModel
+from .utils import get_now
 
 _LOGGER = logging.getLogger(__name__)
-
-_LOGGER.info("DEFAULT_API_HOST: %s", DEFAULT_API_HOST)
 
 
 class APIAuth(httpx.Auth):
@@ -129,8 +129,6 @@ class APIAuth(httpx.Auth):
 
         if not token_data:
             token_data = await self._login()
-
-        _LOGGER.info("TOKEN_DATA: %s", token_data)
 
         token_data["expires_at"] = token_data["expires_at"] - EXPIRES_AT_OFFSET
 
@@ -236,7 +234,7 @@ class API(httpx.AsyncClient):
 
         # Set default values
         kwargs["base_url"] = kwargs.get("base_url") or DEFAULT_API_HOST
-        kwargs["headers"] = self.generate_header(kwargs.get("headers"), kwargs)
+        kwargs["headers"] = kwargs.get("headers")
 
         # Register event hooks
         kwargs["event_hooks"] = defaultdict(list, **kwargs.get("event_hooks", {}))
@@ -290,16 +288,19 @@ class API(httpx.AsyncClient):
 
         super().__init__(*args, **kwargs)
 
-    def generate_header(self, data: dict | None, all_data: dict) -> dict[str, str]:
-        """Generate a header for HTTP requests to the server."""
+    def _merge_headers(self, headers):
+        """Add custom headers and Merge headers."""
 
-        headers = {
-            "ts": str(int(datetime.datetime.now().timestamp())),
-            "user-agent": X_USER_AGENT,
-        }
+        headers = super()._merge_headers(headers)
 
-        if data:
-            headers.update(data)
+        # Add custom headers
+        if headers:
+            headers.update(
+                {
+                    "ts": str(int(datetime.datetime.now().timestamp())),
+                    "user-agent": X_USER_AGENT,
+                }
+            )
 
         return headers
 
@@ -362,7 +363,7 @@ class API(httpx.AsyncClient):
 
                 # Add ext attrs
                 dev["type"] = "fan" if dev["model"] == "gryfy" else dev["model"]
-                dev["brand_name"] = "AirMate"
+                dev["brand_name"] = "AirMate CN"
 
                 # Add default states
                 dev["online_status"] = 0
@@ -404,8 +405,13 @@ class API(httpx.AsyncClient):
 
         return default_house
 
-    async def fetch_devices_state(self, dev_list: list[dict]) -> list[dict]:
+    async def fetch_devices_state(self, dev_list: list[DeviceModel]) -> list[dict]:
         """Fetch devices state from API."""
+
+        params = [
+            {"device_id": device.id, "product_key": device.get("product_key")}
+            for device in dev_list
+        ]
 
         # States schema
         # [{
@@ -435,7 +441,32 @@ class API(httpx.AsyncClient):
         #         "online_status": "1",
         #     },
         # }]
-        return await self.post(
+        res = await self.post(
             self.msg_base_url + "/message_center/api/v1/app/shadow/devices",
-            json={"list": dev_list},
+            json={"list": params},
+        )
+
+        return res.json()["data"]["list"]
+
+    async def update_device_state(self, dev: DeviceModel, data: dict) -> dict:
+        """Update device state."""
+
+        now = get_now()
+        now_timestamp = int(1000 * now.timestamp())
+
+        return await self.post(
+            "/api/v1/device/commands",
+            json={
+                "payload": {
+                    "device_id": dev.id,
+                    "timestamp": str(now_timestamp),
+                    "msg_id": f"{now_timestamp}ez9u{now.hour}",
+                    "method": "thing.property.update",
+                    "command": 300013,
+                    "data": data,
+                },
+                "product_key": dev.get("product_key"),
+                "device_id": dev.id,
+                "cmd_type": 2,
+            },
         )

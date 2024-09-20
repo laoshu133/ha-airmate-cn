@@ -3,13 +3,9 @@
 # import asyncio
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING
 
 # from .api_utils import AuthError
 # from .utils import get_now
-
-if TYPE_CHECKING:
-    from .entity import BaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,14 +21,6 @@ class DeviceModel:
         self.data = {}
 
         self.update(data)
-
-    def get(self, key: str, default_val=""):
-        """Get value by key."""
-        return self.data.get(key, default_val)
-
-    def update(self, data: dict) -> None:
-        """Update the state."""
-        self.data.update(data)
 
     @property
     def id(self) -> str:
@@ -57,4 +45,16 @@ class DeviceModel:
     @property
     def serial_number(self) -> str:
         """Get serial_number of the model."""
-        return self.data.get("serial_number", self.data.get("id", ""))
+        return self.data.get("serial_number", self.id)
+
+    def get(self, key: str, default_val="", base_key: str | None = None):
+        """Get value by key."""
+
+        data = self.data if not base_key else self.data.get(base_key, {})
+        return data.get(key, default_val)
+
+    def update(self, data: dict, base_key: str | None = None) -> None:
+        """Update the state."""
+
+        dist = self.data if not base_key else self.data.setdefault(base_key, {})
+        dist.update(data)

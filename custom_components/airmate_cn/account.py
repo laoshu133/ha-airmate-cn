@@ -1,12 +1,19 @@
 """Access to a Account."""
 
+from __future__ import annotations
+
 from base64 import b64decode
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from .api import API, APIAuth
-from .const import API_BASE_CFG
+from .const import API_BASE_CFG, EXPIRES_AT_OFFSET
 from .dao import DeviceModel
+from .utils import get_now
+
+if TYPE_CHECKING:
+    from .entity import BaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +30,7 @@ class Account:
 
         # Get init tokens from config and remove it
         init_tokens: dict = config.get("init_tokens") or {}
-        config.pop("init_token")
+        config.pop("init_tokens", None)
 
         # Read config from .const with base64 and json decode
         api_config: dict[str, str] = json.loads(b64decode(API_BASE_CFG).decode())
@@ -58,13 +65,14 @@ class Account:
     async def fetch_devices_state(self) -> None:
         """Fetch devices state from API."""
         devices = await self.get_devices()
-        params = [
-            {"device_id": device.id, "product_key": device.get("product_key")}
-            for device in devices
-        ]
+
+        # Check last fetch time
+        if self.fetched_at and get_now() - self.fetched_at < EXPIRES_AT_OFFSET:
+            return
 
         # Fetch states
-        states = await self.api.fetch_devices_state(params)
+        _LOGGER.info("Fetch devices state from server")
+        states = await self.api.fetch_devices_state(devices)
 
         # Update devices state
         if len(states) > 0:
@@ -80,3 +88,20 @@ class Account:
                             "base_info": state["base_info"],
                         }
                     )
+
+        self.fetched_at = get_now()
+
+    async def push_entity_state(self, entity: BaseEntity, data: dict) -> None:
+        """Push entity state to server."""
+
+        try:
+            # Update local state
+            entity.model.update(data, "dp_status")
+
+            # Push state to server
+            await self.api.update_device_state(entity.model, data)
+        finally:
+            # Auto fetch last state
+            if entity.coordinator:
+                # HTTP has latency, WebSocket messages are not implemented
+                await entity.coordinator.async_request_refresh()

@@ -36,7 +36,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                account = Account(user_input)
+                account = Account(config=user_input)
                 house = await account.api.get_default_house()
 
                 # Add init tokens
@@ -46,7 +46,7 @@ class ConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 username = user_input[CONF_USERNAME]
-                title = "AirMate CN - " + house.villageName
+                title = "AirMate CN - " + house.get("name", user_input[CONF_USERNAME])
 
                 await self.async_set_unique_id(username)
                 self._abort_if_unique_id_configured()

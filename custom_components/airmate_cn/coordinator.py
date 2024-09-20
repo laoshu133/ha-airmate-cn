@@ -27,7 +27,14 @@ class Coordinator(DataUpdateCoordinator[None]):
         """Initialize a data updater."""
 
         self.config_entry = entry
-        self.account = Account(entry.data)
+
+        # Init account
+        entry_data = entry.data.copy()
+        self.account = Account(config=entry_data)
+
+        # Remove init token from entry data
+        _LOGGER.info("Coordinator.update_config: %s", entry_data)
+        hass.config_entries.async_update_entry(self.config_entry, data=entry_data)
 
         # Force update data when init
         hass.config_entries.async_update_entry(self.config_entry, data=entry.data)
