@@ -7,7 +7,7 @@
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/laoshu133/airmate_cn",
+  "documentation": "https://github.com/laoshu133/ha-airmate-cn",
   "homekit": {},
   "iot_class": "assumed_state",
   "requirements": [],

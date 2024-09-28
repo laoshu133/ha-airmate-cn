@@ -46,7 +46,7 @@ SPEED_RANGE = (1, 32)
 
 
 class AirMateFan(BaseEntity, FanEntity):
-    """A AirMate Fan."""
+    """An AirMate Fan."""
 
     def __init__(
         self, coordinator: Coordinator, model: DeviceModel, desc: BaseEntityDesc | None
