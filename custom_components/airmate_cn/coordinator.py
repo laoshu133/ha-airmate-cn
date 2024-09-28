@@ -43,7 +43,7 @@ class Coordinator(DataUpdateCoordinator[None]):
             hass,
             _LOGGER,
             name=f"{DOMAIN}.{entry.entry_id}",
-            update_interval=AUTH_VALID_OFFSET / 2,
+            update_interval=AUTH_VALID_OFFSET * 2,
         )
 
         # Default to false on init so _async_update_data logic works
