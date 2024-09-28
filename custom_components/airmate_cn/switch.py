@@ -9,7 +9,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant, callback
 
 from .dao import DeviceModel
-from .entity import BaseEntity
+from .entity import BaseEntity, BaseEntityDesc
 
 if TYPE_CHECKING:
     from .coordinator import Coordinator
@@ -21,8 +21,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     """Perform the setup for AirMate Fan devices."""
     coordinator = config_entry.coordinator
 
+    # Vertical Swing switch
+    desc = BaseEntityDesc(
+        key="vertical_swing",
+        name="Vertical Swing",
+    )
+
     entities = [
-        AirMateSwitch(coordinator, device)
+        AirMateSwitch(coordinator, device, desc)
         for device in coordinator.account.devices
         if device.type == "fan"
     ]
@@ -33,9 +39,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 class AirMateSwitch(BaseEntity, SwitchEntity):
     """A switch for AirMate Fan."""
 
-    def __init__(self, coordinator: Coordinator, model: DeviceModel) -> None:
+    def __init__(
+        self, coordinator: Coordinator, model: DeviceModel, desc: BaseEntityDesc
+    ) -> None:
         """Initialize the vertical_swing for Fan."""
-        super().__init__(coordinator, model)
+        super().__init__(coordinator, model, desc)
 
         self._attr_is_on = False
 

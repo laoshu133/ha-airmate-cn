@@ -14,7 +14,7 @@ from homeassistant.util.percentage import (
 )
 
 from .dao import DeviceModel
-from .entity import BaseEntity
+from .entity import BaseEntity, BaseEntityDesc
 
 if TYPE_CHECKING:
     from .coordinator import Coordinator
@@ -26,8 +26,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     """Perform the setup for AirMate Fan devices."""
     coordinator = config_entry.coordinator
 
+    # Main entity has no description
+    desc = None
+
     entities = [
-        AirMateFan(coordinator, device)
+        AirMateFan(coordinator, device, desc)
         for device in coordinator.account.devices
         if device.type == "fan"
     ]
@@ -45,9 +48,11 @@ SPEED_RANGE = (1, 32)
 class AirMateFan(BaseEntity, FanEntity):
     """A AirMate Fan."""
 
-    def __init__(self, coordinator: Coordinator, model: DeviceModel) -> None:
+    def __init__(
+        self, coordinator: Coordinator, model: DeviceModel, desc: BaseEntityDesc | None
+    ) -> None:
         """Initialize the Fan."""
-        super().__init__(coordinator, model)
+        super().__init__(coordinator, model, desc)
 
         self._attr_supported_features = (
             FanEntityFeature.OSCILLATE

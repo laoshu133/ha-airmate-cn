@@ -33,7 +33,7 @@ class Coordinator(DataUpdateCoordinator[None]):
         self.account = Account(config=entry_data)
 
         # Remove init token from entry data
-        _LOGGER.info("Coordinator.update_config: %s", entry_data)
+        _LOGGER.debug("Coordinator.update_config: %s", entry_data)
         hass.config_entries.async_update_entry(self.config_entry, data=entry_data)
 
         # Force update data when init

@@ -9,7 +9,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant, callback
 
 from .dao import DeviceModel
-from .entity import BaseEntity
+from .entity import BaseEntity, BaseEntityDesc
 
 if TYPE_CHECKING:
     from .coordinator import Coordinator
@@ -21,8 +21,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     """Perform the setup for AirMate Fan devices."""
     coordinator = config_entry.coordinator
 
+    # Horizontal Swing select
+    desc = BaseEntityDesc(
+        key="horizontal_swing",
+        name="Horizontal Swing",
+        icon="mdi:arrow-oscillating",
+    )
+
     entities = [
-        AirMateSelect(coordinator, device)
+        AirMateSelect(coordinator, device, desc)
         for device in coordinator.account.devices
         if device.type == "fan"
     ]
@@ -33,9 +40,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 class AirMateSelect(BaseEntity, SelectEntity):
     """A select for AirMate Fan."""
 
-    def __init__(self, coordinator: Coordinator, model: DeviceModel) -> None:
+    def __init__(
+        self,
+        coordinator: Coordinator,
+        model: DeviceModel,
+        desc: BaseEntityDesc,
+    ) -> None:
         """Initialize the horizontal_swing for Fan."""
-        super().__init__(coordinator, model)
+        super().__init__(coordinator, model, desc)
 
         # horizontal_swing: 0-关摆头, 1-开摆头, 2-30°摆头, 3-60°摆头, 4-90°摆头, 5-120°摆头
         self._attr_options = ["Off", "30°", "60°", "90°", "120°"]
