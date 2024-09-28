@@ -56,13 +56,14 @@ class AirMateFan(BaseEntity, FanEntity):
 
         self._attr_supported_features = (
             FanEntityFeature.OSCILLATE
-            | FanEntityFeature.PRESET_MODE
+            # HomeKit 对 PRESET_MODE 支持不好，暂时不开启
+            # | FanEntityFeature.PRESET_MODE
             | FanEntityFeature.SET_SPEED
             | FanEntityFeature.TURN_OFF
             | FanEntityFeature.TURN_ON
         )
 
-        self._attr_preset_modes = ORDERED_NAMED_MODES[1:]
+        # self._attr_preset_modes = ORDERED_NAMED_MODES[1:]
         self._attr_preset_mode = None
 
         self._attr_oscillating = False
@@ -90,16 +91,18 @@ class AirMateFan(BaseEntity, FanEntity):
         """Get percentage by speed."""
         return ranged_value_to_percentage(SPEED_RANGE, speed)
 
-    def get_last_percentage(self) -> int:
+    def get_last_speed(self) -> int:
         """Get last speed."""
         dp_status = self.model.get("dp_status", {})
 
-        return self.speed_to_percentage(dp_status.get("downshift", 1))
+        return dp_status.get("downshift", 1)
 
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ) -> None:
         """Turn on the fan."""
+
+        _LOGGER.info("Turn on: %s, %s", percentage, preset_mode)
 
         # power_switch: 0, 1
         # mode: 0-标准风, 1-婴儿风, 2-暴风
@@ -107,11 +110,13 @@ class AirMateFan(BaseEntity, FanEntity):
         data = {
             "power_switch": 1,
             "mode": self.mode_to_index("normal"),
-            "downshift": self.get_last_percentage(),
+            "downshift": self.get_last_speed(),
         }
 
         if percentage is not None and percentage > 0:
             data["downshift"] = self.percentage_to_speed(percentage)
+
+        _LOGGER.info("Turn on.downshift: %s, %s", data["downshift"], data["mode"])
 
         if preset_mode is not None:
             data["mode"] = self.mode_to_index(preset_mode)

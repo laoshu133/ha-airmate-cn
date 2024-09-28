@@ -1,7 +1,7 @@
 {
   "domain": "airmate_cn",
   "name": "AirMate CN",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "codeowners": [
     "@laoshu133"
   ],
