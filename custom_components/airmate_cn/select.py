@@ -49,8 +49,8 @@ class AirMateSelect(BaseEntity, SelectEntity):
         """Initialize the horizontal_swing for Fan."""
         super().__init__(coordinator, model, desc)
 
-        # horizontal_swing: 0-关摆头, 1-开摆头, 2-30°摆头, 3-60°摆头, 4-90°摆头, 5-120°摆头
-        self._attr_options = ["Off", "30°", "60°", "90°", "120°"]
+        # horizontal_swing: 0-关摆头, 1-开摆头, 2-30°摆头, 3-60°摆头, 4-90°摆头
+        self._attr_options = ["Off", "30°", "60°", "90°"]
         self._attr_current_option = "Off"
 
     async def async_select_option(self, option: str) -> None:

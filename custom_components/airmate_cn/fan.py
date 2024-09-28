@@ -90,6 +90,12 @@ class AirMateFan(BaseEntity, FanEntity):
         """Get percentage by speed."""
         return ranged_value_to_percentage(SPEED_RANGE, speed)
 
+    def get_last_percentage(self) -> int:
+        """Get last speed."""
+        dp_status = self.model.get("dp_status", {})
+
+        return self.speed_to_percentage(dp_status.get("downshift", 1))
+
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ) -> None:
@@ -101,7 +107,7 @@ class AirMateFan(BaseEntity, FanEntity):
         data = {
             "power_switch": 1,
             "mode": self.mode_to_index("normal"),
-            "downshift": self.percentage_to_speed(self.percentage),
+            "downshift": self.get_last_percentage(),
         }
 
         if percentage is not None and percentage > 0:
@@ -134,7 +140,7 @@ class AirMateFan(BaseEntity, FanEntity):
 
         _LOGGER.info("Oscillate: %s", oscillating)
 
-        # horizontal_swing: 0-关摆头, 1-开摆头, 2-30°摆头, 3-60°摆头, 4-90°摆头, 5-120°摆头
+        # horizontal_swing: 0-关摆头, 1-开摆头, 2-30°摆头, 3-60°摆头, 4-90°摆头
         await self.account.push_entity_state(
             self, {"horizontal_swing": 3 if oscillating else 0}
         )
@@ -144,26 +150,17 @@ class AirMateFan(BaseEntity, FanEntity):
         """Handle updated data from the coordinator."""
 
         dp_status: dict = self.model.get("dp_status", {})
-        mode = self.index_to_mode(dp_status.get("mode", 0))
 
-        _LOGGER.info("Updating model of %s - %s", self.model.name, dp_status)
+        is_on = dp_status.get("power_switch", 0) == 1
+        mode = self.index_to_mode(dp_status.get("mode", 0))
+        percentage = self.speed_to_percentage(dp_status.get("downshift", 1))
+
+        # _LOGGER.info("Updating model of %s: %s", self.model.name, dp_status)
 
         # Update state
-        self._attr_is_on = dp_status.get("power_switch", 0) == 1
+        self._attr_percentage = percentage if is_on else 0
         self._attr_preset_mode = mode if mode != "normal" else None
-        self._attr_percentage = self.speed_to_percentage(dp_status.get("downshift", 1))
         self._attr_oscillating = dp_status.get("horizontal_swing", 0) != 0
-
-        # _LOGGER.info(
-        #     "Updated model: %s - %s - %s",
-        #     self._attr_is_on,
-        #     dp_status.get("power_switch", 0),
-        #     self._attr_preset_mode,
-        # )
-
-        # self._attr_current_direction = (
-        #     "forward" if dp_status.get("vertical_swing", 0) != 0 else "vertical_swing"
-        # )
 
         # self.async_write_ha_state()
         super()._handle_coordinator_update()

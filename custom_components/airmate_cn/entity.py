@@ -48,7 +48,7 @@ class BaseEntity(CoordinatorEntity[Coordinator]):
 
         # Main entity
         if not hasattr(self, "entity_description"):
-            # Reset name if main entity
+            # Reset name if no description
             self._attr_name = ""
 
         self._attr_unique_id = f"{DOMAIN}_{self.full_type.replace(".", "_")}_{model.id}"

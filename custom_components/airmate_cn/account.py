@@ -26,23 +26,23 @@ class Account:
     def __init__(self, config: dict) -> None:
         """Initialize the account."""
 
-        _LOGGER.info("Account.init: %s", config)
+        # Read config from .const with base64 and json decode
+        api_config: dict[str, str] = json.loads(b64decode(API_BASE_CFG).decode())
+
+        # # Just for debugging
+        # _LOGGER.debug("Account.init: %s", config)
+        # api_config.update(
+        #     {
+        #         "all_proxy_url": "http://172.16.3.33:8888",
+        #         "ssl_verify_pem": "/workspaces/proxyman-ca.pem",
+        #     }
+        # )
 
         # Get init tokens from config and remove it
         init_tokens: dict = config.get("init_tokens") or {}
         config.pop("init_tokens", None)
 
-        # Read config from .const with base64 and json decode
-        api_config: dict[str, str] = json.loads(b64decode(API_BASE_CFG).decode())
-
-        # Only for debugging
-        api_config.update(
-            {
-                "all_proxy_url": "http://172.16.3.33:8888",
-                "ssl_verify_pem": "/workspaces/proxyman-ca.pem",
-            }
-        )
-
+        # Init API
         self.api = API(
             **api_config,
             auth=APIAuth(api_config=api_config, **config, **init_tokens),
