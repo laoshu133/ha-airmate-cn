@@ -57,7 +57,7 @@ class BaseEntity(CoordinatorEntity[Coordinator]):
             serial_number=model.serial_number,
             manufacturer=model.brand_name,
             identifiers={(DOMAIN, model.id)},
-            model=f"{DOMAIN}.{self.full_type}",
+            model=f"{DOMAIN}.{model.type}",
             name=model.name,
         )
 

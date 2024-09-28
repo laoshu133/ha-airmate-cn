@@ -15,4 +15,4 @@ X_USER_AGENT = "iOS_WCloud/1.2.1 (iPhone; iOS 17.5.1; Scale/3.00)"
 HTTPX_TIMEOUT = 30.0
 
 AUTH_VALID_OFFSET = datetime.timedelta(hours=5)
-EXPIRES_AT_OFFSET = datetime.timedelta(seconds=HTTPX_TIMEOUT * 10)
+EXPIRES_AT_OFFSET = datetime.timedelta(seconds=HTTPX_TIMEOUT * 4)
