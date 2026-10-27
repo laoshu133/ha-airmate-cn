@@ -72,6 +72,9 @@ topic write <product_id>/<device_id>/rrpc
 - 3866 不暴露到公网。
 
 目前已观察到的设备业务连接只有 `xiot.zhidekan.tv:3866` 的明文 MQTT TCP 连接。
+旧版本插件访问 `api-life.worthcloud.net` 等 HTTPS 地址，是 Home Assistant 到原厂云的请求，
+不能推断风扇本身会访问这些 HTTPS 地址。当前没有风扇访问 80/443 的证据；如果需要确认某个固件版本，
+应在该设备运行期间被动抓包观察，而不是根据旧插件的 HTTP 实现推断。
 此前对少量常见端口的检查没有发现监听，但这不是完整端口扫描；不要据此断言所有固件版本都没有其他流量。
 可以在 broker 主机上只允许风扇来源访问 TCP 3866，其余入站端口由宿主机防火墙拒绝或丢弃。
 DNS 查询本身仍需要设备能够访问它配置的 DNS 服务器，通常使用 UDP 53，必要时可能回退 TCP 53；
@@ -100,6 +103,18 @@ DNS 查询本身仍需要设备能够访问它配置的 DNS 服务器，通常�
 随后立即收紧 ACL 到该设备的精确主题。也可以从 broker 连接日志或一条上报 JSON 中取得这两个 ID。
 原始 CONNECT、密码和真实 payload 只能保存在本地私有目录。
 
+仓库提供了一个不依赖第三方 Python 包的发现脚本：
+
+```bash
+python3 tools/discover_device.py \
+  --host <broker-host> \
+  --port 3866 \
+  --username <temporary-observer-user>
+```
+
+脚本使用交互式密码输入，默认观察 90 秒，发现第一条有效 `data` 消息后只输出主题、product ID 和 device ID。
+它不会输出完整 payload。观察账号必须临时拥有 `#` 读取权限；发现后立即删除该权限并收紧 ACL。
+
 ## 4. 配置 Home Assistant
 
 1. 在设置中添加 MQTT 集成，填写 broker 主机、端口 3866、HA 账号和密码。
@@ -108,7 +123,8 @@ DNS 查询本身仍需要设备能够访问它配置的 DNS 服务器，通常�
 4. 等待设备上报。
 
 集成 manifest 声明了 Home Assistant 的 `mqtt` 集成依赖，因此 Home Assistant 会按依赖顺序加载它。
-这不会安装 Mosquitto，也不会自动创建 MQTT 配置条目：broker 地址、端口和账号密码必须由使用者配置。
+MQTT 集成是 Home Assistant 自带的集成，不需要另行下载；但这不会安装 Mosquitto，也不会自动创建 MQTT 配置条目：
+broker 地址、端口和账号密码必须由使用者配置。
 当前配置流程在没有已启用 MQTT 条目时会提示先添加 MQTT。
 
 成功后会创建：

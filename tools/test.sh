@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pinned to the user's HA runtime; contains all runtime dependencies, no pip install.
+# Pinned to the tested Home Assistant runtime; contains all runtime dependencies, no pip install.
 set -eu
 cd "$(dirname "$0")/.."
 docker run --rm --network none -v "$PWD:/work:ro" -w /work \
