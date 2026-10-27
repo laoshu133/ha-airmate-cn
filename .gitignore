@@ -9,8 +9,6 @@ __pycache__
 .ci-task-runner-cache.json
 dist*
 
-# docs
-docs
 
 # IDE
 .idea
@@ -30,3 +28,8 @@ agentx-conf.json
 node_modules
 npm-debug.log
 .env
+
+# Local device research contains MQTT credentials and identifying payloads.
+.local/
+*.pcap
+*.pcapng
