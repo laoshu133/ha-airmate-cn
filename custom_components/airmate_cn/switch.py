@@ -1,68 +1,28 @@
-"""Platform for AirMate Fan integration."""
-
-from __future__ import annotations
-
-import logging
-from typing import TYPE_CHECKING
+"""Verified vertical swing control."""
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.core import HomeAssistant, callback
 
-from .dao import DeviceModel
-from .entity import BaseEntity, BaseEntityDesc
-
-if TYPE_CHECKING:
-    from .coordinator import Coordinator
-
-_LOGGER = logging.getLogger(__name__)
+from .entity import BaseEntity
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
-    """Perform the setup for AirMate Fan devices."""
-    coordinator = config_entry.coordinator
-
-    # Vertical Swing switch
-    desc = BaseEntityDesc(
-        key="vertical_swing",
-        name="Vertical Swing",
-    )
-
-    entities = [
-        AirMateSwitch(coordinator, device, desc)
-        for device in coordinator.account.devices
-        if device.type == "fan"
-    ]
-
-    async_add_entities(entities)
+async def async_setup_entry(hass, entry, async_add_entities):
+    async_add_entities([AirMateVerticalSwing(entry.runtime_data)])
 
 
-class AirMateSwitch(BaseEntity, SwitchEntity):
-    """A switch for AirMate Fan."""
+class AirMateVerticalSwing(BaseEntity, SwitchEntity):
+    _attr_translation_key = "vertical_swing"
 
-    def __init__(
-        self, coordinator: Coordinator, model: DeviceModel, desc: BaseEntityDesc
-    ) -> None:
-        """Initialize the vertical_swing for Fan."""
-        super().__init__(coordinator, model, desc)
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "vertical_swing")
+        del self._attr_name
 
-        self._attr_is_on = False
+    @property
+    def is_on(self) -> bool | None:
+        value = self.coordinator.data.get("vertical_swing")
+        return None if value is None else value == 1
 
-    async def async_turn_on(self) -> None:
-        """Turn the vertical_swing on."""
-        await self.account.push_entity_state(self, {"vertical_swing": 1})
+    async def async_turn_on(self, **kwargs) -> None:
+        await self.coordinator.async_set_vertical(1)
 
-    async def async_turn_off(self) -> None:
-        """Turn the vertical_swing off."""
-        await self.account.push_entity_state(self, {"vertical_swing": 0})
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-
-        dp_status: dict = self.model.get("dp_status", {})
-
-        # Update state
-        self._attr_is_on = dp_status.get("vertical_swing", 0) == 1
-
-        # self.async_write_ha_state()
-        super()._handle_coordinator_update()
+    async def async_turn_off(self, **kwargs) -> None:
+        await self.coordinator.async_set_vertical(0)

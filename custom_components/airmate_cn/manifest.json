@@ -1,16 +1,19 @@
 {
   "domain": "airmate_cn",
   "name": "AirMate CN",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "codeowners": [
     "@laoshu133"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "mqtt"
+  ],
   "documentation": "https://github.com/laoshu133/ha-airmate-cn",
   "homekit": {},
-  "iot_class": "assumed_state",
+  "iot_class": "local_push",
   "requirements": [],
   "ssdp": [],
-  "zeroconf": []
+  "zeroconf": [],
+  "integration_type": "device"
 }

@@ -1,58 +1,54 @@
-"""Config flow for AirMate integration."""
-
-from __future__ import annotations
-
-import logging
-from typing import Any
+"""One local device per entry, with credentials owned by HA's MQTT integration."""
 
 import voluptuous as vol
+from homeassistant.config_entries import ConfigFlow
+from homeassistant.const import CONF_NAME
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from .const import CONF_DEVICE_ID, CONF_PRODUCT_ID, DOMAIN
+from .protocol import valid_identifier
 
-# from homeassistant.core import HomeAssistant
-from .account import Account
-from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
-
-STEP_USER_DATA_SCHEMA = vol.Schema(
+SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_USERNAME, "Phone Number"): str,
-        vol.Required(CONF_PASSWORD, "Password"): str,
+        vol.Required(CONF_NAME, default="AirMate"): vol.All(
+            str, vol.Length(min=1, max=64)
+        ),
+        vol.Required(CONF_PRODUCT_ID): str,
+        vol.Required(CONF_DEVICE_ID): str,
     }
 )
 
 
-class ConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for AirMate."""
+class AirMateConfigFlow(ConfigFlow, domain=DOMAIN):
+    VERSION = 2
 
-    VERSION = 1
-
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle the initial step."""
-        errors: dict[str, str] = {}
+    async def async_step_user(self, user_input=None):
+        if not any(
+            entry.disabled_by is None
+            for entry in self.hass.config_entries.async_entries("mqtt")
+        ):
+            return self.async_abort(reason="mqtt_required")
+        errors = {}
         if user_input is not None:
-            try:
-                account = Account(config=user_input)
-                house = await account.api.get_default_house()
-
-                # Add init tokens
-                user_input["init_tokens"] = await account.api.get_tokens()
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            if not all(
+                valid_identifier(user_input[key])
+                for key in (CONF_PRODUCT_ID, CONF_DEVICE_ID)
+            ):
+                errors["base"] = "invalid_identifier"
+            elif (
+                not isinstance(user_input[CONF_NAME], str)
+                or not user_input[CONF_NAME].strip()
+            ):
+                errors[CONF_NAME] = "invalid_name"
             else:
-                username = user_input[CONF_USERNAME]
-                title = "AirMate CN - " + house.get("name", user_input[CONF_USERNAME])
-
-                await self.async_set_unique_id(username)
+                await self.async_set_unique_id(
+                    f"{user_input[CONF_PRODUCT_ID]}/{user_input[CONF_DEVICE_ID]}"
+                )
                 self._abort_if_unique_id_configured()
-
-                return self.async_create_entry(title=title, data=user_input)
-
-        return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
-        )
+                return self.async_create_entry(
+                    title=user_input[CONF_NAME].strip(),
+                    data={
+                        CONF_PRODUCT_ID: user_input[CONF_PRODUCT_ID],
+                        CONF_DEVICE_ID: user_input[CONF_DEVICE_ID],
+                    },
+                )
+        return self.async_show_form(step_id="user", data_schema=SCHEMA, errors=errors)

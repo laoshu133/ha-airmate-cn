@@ -1,21 +1,86 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Device is already configured"
-        },
-        "error": {
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "host": "API Host",
-                    "password": "Password",
-                    "username": "Phone Number"
-                }
-            }
+  "title": "AirMate CN",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Local MQTT fan",
+        "description": "Enter the product and device IDs from the device data topic. Configure MQTT first. Supports power, 32 speed levels, and horizontal/vertical swing. Changing speed selects normal mode.",
+        "data": {
+          "name": "Name",
+          "product_id": "Product ID",
+          "device_id": "Device ID"
         }
+      }
+    },
+    "error": {
+      "invalid_identifier": "Use 1–64 letters, digits, underscores or hyphens.",
+      "invalid_name": "Enter a name."
+    },
+    "abort": {
+      "mqtt_required": "Add and enable the MQTT integration first.",
+      "already_configured": "This device is already configured."
     }
+  },
+  "entity": {
+    "sensor": {
+      "downshift": {
+        "name": "Speed level"
+      },
+      "horizontal_swing": {
+        "name": "Horizontal swing",
+        "state": {
+          "off": "Off",
+          "on": "On",
+          "30°": "30°",
+          "60°": "60°",
+          "90°": "90°"
+        }
+      },
+      "vertical_swing": {
+        "name": "Vertical swing",
+        "state": {
+          "off": "Off",
+          "on": "On"
+        }
+      },
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "normal": "Normal",
+          "baby": "Baby",
+          "strong": "Strong"
+        }
+      },
+      "light": {
+        "name": "Light",
+        "state": {
+          "off": "Off",
+          "on": "On"
+        }
+      },
+      "mute": {
+        "name": "Mute",
+        "state": {
+          "off": "Off",
+          "on": "On"
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horizontal swing angle",
+        "state": {
+          "off": "Off",
+          "30°": "30°",
+          "60°": "60°",
+          "90°": "90°"
+        }
+      }
+    },
+    "switch": {
+      "vertical_swing": {
+        "name": "Vertical swing"
+      }
+    }
+  }
 }

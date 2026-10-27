@@ -1,52 +1,47 @@
-"""The AirMate integration."""
+"""Local MQTT integration for AirMate fans."""
 
 from __future__ import annotations
 
 import logging
 
+from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import DOMAIN
 from .coordinator import Coordinator
 
-PLATFORMS: list[Platform] = [Platform.FAN, Platform.SELECT, Platform.SWITCH]
-
+PLATFORMS = [Platform.FAN, Platform.SENSOR, Platform.SELECT, Platform.SWITCH]
 _LOGGER = logging.getLogger(__name__)
+type AirMateConfigEntry = ConfigEntry[Coordinator]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up from a config entry."""
-
-    _LOGGER.info(f"{DOMAIN}.config_entity: {entry.entry_id}")  # noqa: G004
-
-    # Set up one data coordinator per account/config entry
-    coordinator = Coordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
-
-    entry.coordinator = coordinator
-
-    # Set up all platforms except notify
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Clean up devices which are not assigned to the account anymore
-    account_devices = {(DOMAIN, v.id) for v in coordinator.account.devices}
-    device_registry = dr.async_get(hass)
-    device_entries = dr.async_entries_for_config_entry(
-        device_registry, config_entry_id=entry.entry_id
-    )
-    for device in device_entries:
-        if not device.identifiers.intersection(account_devices):
-            device_registry.async_update_device(
-                device.id, remove_config_entry_id=entry.entry_id
-            )
-
+async def async_setup_entry(hass, entry: AirMateConfigEntry) -> bool:
+    if not await mqtt.async_wait_for_mqtt_client(hass):
+        raise ConfigEntryNotReady("Configure the Home Assistant MQTT integration first")
+    coordinator = entry.runtime_data = Coordinator(hass, entry)
+    await coordinator.async_start()
+    entry.async_on_unload(coordinator.async_close)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except BaseException:
+        coordinator.async_close()
+        raise
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+async def async_unload_entry(hass, entry: AirMateConfigEntry) -> bool:
+    if await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        entry.runtime_data.async_close()
+        return True
+    return False
 
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+async def async_migrate_entry(hass, entry: AirMateConfigEntry) -> bool:
+    if entry.version < 2:
+        _LOGGER.error(
+            "The legacy cloud account cannot be migrated automatically. Remove the old "
+            "AirMate entry and add one local MQTT entry per device; see README migration steps"
+        )
+        return False
+    return entry.version == 2

@@ -1,0 +1,86 @@
+{
+  "title": "AirMate CN",
+  "config": {
+    "step": {
+      "user": {
+        "title": "本地 MQTT 风扇",
+        "description": "填写设备 data 主题中的产品 ID 和设备 ID。需要先配置 MQTT 集成；支持开关、32 档调速与水平/垂直摇头。调速会切换到标准风。",
+        "data": {
+          "name": "名称",
+          "product_id": "产品 ID",
+          "device_id": "设备 ID"
+        }
+      }
+    },
+    "error": {
+      "invalid_identifier": "ID 只能包含字母、数字、下划线或连字符（1–64 位）。",
+      "invalid_name": "请输入名称。"
+    },
+    "abort": {
+      "mqtt_required": "请先添加并启用 MQTT 集成。",
+      "already_configured": "此设备已配置。"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "downshift": {
+        "name": "风速档位"
+      },
+      "horizontal_swing": {
+        "name": "水平摆头",
+        "state": {
+          "off": "关闭",
+          "on": "开启",
+          "30°": "30°",
+          "60°": "60°",
+          "90°": "90°"
+        }
+      },
+      "vertical_swing": {
+        "name": "垂直摆头",
+        "state": {
+          "off": "关闭",
+          "on": "开启"
+        }
+      },
+      "mode": {
+        "name": "模式",
+        "state": {
+          "normal": "标准风",
+          "baby": "婴儿风",
+          "strong": "暴风"
+        }
+      },
+      "light": {
+        "name": "灯光",
+        "state": {
+          "off": "关闭",
+          "on": "开启"
+        }
+      },
+      "mute": {
+        "name": "静音",
+        "state": {
+          "off": "关闭",
+          "on": "开启"
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "水平摇头角度",
+        "state": {
+          "off": "关闭",
+          "30°": "30°",
+          "60°": "60°",
+          "90°": "90°"
+        }
+      }
+    },
+    "switch": {
+      "vertical_swing": {
+        "name": "垂直摇头"
+      }
+    }
+  }
+}

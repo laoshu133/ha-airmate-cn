@@ -1,76 +1,31 @@
-"""Platform for AirMate Fan integration."""
-
-from __future__ import annotations
-
-import logging
-from typing import TYPE_CHECKING
+"""Verified horizontal swing angles; generic value 1 remains read-only."""
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.core import HomeAssistant, callback
 
-from .dao import DeviceModel
-from .entity import BaseEntity, BaseEntityDesc
-
-if TYPE_CHECKING:
-    from .coordinator import Coordinator
-
-_LOGGER = logging.getLogger(__name__)
+from .entity import BaseEntity
+from .protocol import HORIZONTAL_CONTROL_OPTIONS
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
-    """Perform the setup for AirMate Fan devices."""
-    coordinator = config_entry.coordinator
-
-    # Horizontal Swing select
-    desc = BaseEntityDesc(
-        key="horizontal_swing",
-        name="Horizontal Swing",
-        icon="mdi:arrow-oscillating",
-    )
-
-    entities = [
-        AirMateSelect(coordinator, device, desc)
-        for device in coordinator.account.devices
-        if device.type == "fan"
-    ]
-
-    async_add_entities(entities)
+async def async_setup_entry(hass, entry, async_add_entities):
+    async_add_entities([AirMateHorizontalSwing(entry.runtime_data)])
 
 
-class AirMateSelect(BaseEntity, SelectEntity):
-    """A select for AirMate Fan."""
+class AirMateHorizontalSwing(BaseEntity, SelectEntity):
+    _attr_translation_key = "horizontal_swing"
+    _attr_options = list(HORIZONTAL_CONTROL_OPTIONS.values())
 
-    def __init__(
-        self,
-        coordinator: Coordinator,
-        model: DeviceModel,
-        desc: BaseEntityDesc,
-    ) -> None:
-        """Initialize the horizontal_swing for Fan."""
-        super().__init__(coordinator, model, desc)
+    def __init__(self, coordinator):
+        super().__init__(coordinator, "horizontal_swing")
+        del self._attr_name
 
-        # horizontal_swing: 0-关摆头, 1-开摆头, 2-30°摆头, 3-60°摆头, 4-90°摆头
-        self._attr_options = ["Off", "30°", "60°", "90°"]
-        self._attr_current_option = "Off"
+    @property
+    def current_option(self) -> str | None:
+        return HORIZONTAL_CONTROL_OPTIONS.get(
+            self.coordinator.data.get("horizontal_swing")
+        )
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
-        index = self._attr_options.index(option)
-
-        # 修正缺失选项 「1-开摆头」
-        if index > 0:
-            index += 1
-
-        await self.account.push_entity_state(self, {"horizontal_swing": index})
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-
-        dp_status: dict = self.model.get("dp_status", {})
-
-        # Update state
-        self._attr_current_option = dp_status.get("horizontal_swing", 0) == 1
-
-        # self.async_write_ha_state()
-        super()._handle_coordinator_update()
+        value = {label: code for code, label in HORIZONTAL_CONTROL_OPTIONS.items()}[
+            option
+        ]
+        await self.coordinator.async_set_horizontal(value)
