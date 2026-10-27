@@ -17,6 +17,10 @@ Home Assistant Container 没有 Mosquitto add-on。HA 的 MQTT 集成只负责�
 
 选择一台与风扇在同一局域网的主机，安装 Mosquitto 2.x。让主机的 TCP 3866 映射到 Mosquitto 的 1883：
 
+Mosquitto 对单个或少量设备的资源占用通常很小；本项目的单设备调试容器实测约占 1.5 MiB 内存。
+实际占用会随连接数、日志和持久化消息增加。为了只开放设备需要的入口，可以让宿主机只发布
+3866，容器内部仍使用标准 MQTT 1883。
+
 ```yaml
 services:
   mosquitto:
@@ -67,6 +71,16 @@ topic write <product_id>/<device_id>/rrpc
 - 没有其他透明代理、fake-IP 规则或端口转发抢先接管该连接。
 - 3866 不暴露到公网。
 
+目前已观察到的设备业务连接只有 `xiot.zhidekan.tv:3866` 的明文 MQTT TCP 连接。
+此前对少量常见端口的检查没有发现监听，但这不是完整端口扫描；不要据此断言所有固件版本都没有其他流量。
+可以在 broker 主机上只允许风扇来源访问 TCP 3866，其余入站端口由宿主机防火墙拒绝或丢弃。
+DNS 查询本身仍需要设备能够访问它配置的 DNS 服务器，通常使用 UDP 53，必要时可能回退 TCP 53；
+这不是 broker 需要监听的端口。
+
+设备固定使用 3866 的原因是固件中的 MQTT 服务器端口固定为该值。Mosquitto 不必直接监听 3866：
+也可以使用 `3866:1883` 端口映射，或由 TCP 代理把 3866 转到内部 broker。映射只改变监听位置，
+不能省略 MQTT broker。
+
 ## 3. 获取设备身份
 
 设备状态主题格式为：
@@ -82,7 +96,8 @@ topic write <product_id>/<device_id>/rrpc
 ```
 
 `product_id` 和 `device_id` 来自状态消息及主题。它们与 MQTT client ID、username、password 不同。
-首次接入时使用只读 MQTT 客户端订阅目标设备主题，保存一条脱敏的主题和状态记录即可。
+首次接入时，如果尚不知道主题，可以临时使用权限受限的只读客户端订阅 `#`，记录设备发布的主题，
+随后立即收紧 ACL 到该设备的精确主题。也可以从 broker 连接日志或一条上报 JSON 中取得这两个 ID。
 原始 CONNECT、密码和真实 payload 只能保存在本地私有目录。
 
 ## 4. 配置 Home Assistant
@@ -91,6 +106,10 @@ topic write <product_id>/<device_id>/rrpc
 2. 添加 AirMate CN 集成。
 3. 输入名称、product ID 和 device ID。
 4. 等待设备上报。
+
+集成 manifest 声明了 Home Assistant 的 `mqtt` 集成依赖，因此 Home Assistant 会按依赖顺序加载它。
+这不会安装 Mosquitto，也不会自动创建 MQTT 配置条目：broker 地址、端口和账号密码必须由使用者配置。
+当前配置流程在没有已启用 MQTT 条目时会提示先添加 MQTT。
 
 成功后会创建：
 
