@@ -117,6 +117,13 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.report({"downshift": 20}, retain=True)
         self.assertEqual(self.coordinator.data["downshift"], 11)
 
+        horizontal = AirMateSensor(
+            self.coordinator,
+            next(d for d in DESCRIPTIONS if d.key == "horizontal_swing"),
+        )
+        self.coordinator._expire()
+        self.assertFalse(horizontal.available)
+
     async def test_last_known_state_is_restored(self):
         self.report(
             {

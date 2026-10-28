@@ -13,7 +13,9 @@ class AirMateVerticalSwing(BaseEntity, SwitchEntity):
     _attr_translation_key = "vertical_swing"
 
     def __init__(self, coordinator):
-        super().__init__(coordinator, "vertical_swing")
+        super().__init__(
+            coordinator, "vertical_swing", state_keys={"vertical_swing"}
+        )
         del self._attr_name
 
     @property

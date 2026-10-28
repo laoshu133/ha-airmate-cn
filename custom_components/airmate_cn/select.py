@@ -15,7 +15,9 @@ class AirMateHorizontalSwing(BaseEntity, SelectEntity):
     _attr_options = list(HORIZONTAL_CONTROL_OPTIONS.values())
 
     def __init__(self, coordinator):
-        super().__init__(coordinator, "horizontal_swing")
+        super().__init__(
+            coordinator, "horizontal_swing", state_keys={"horizontal_swing"}
+        )
         del self._attr_name
 
     @property

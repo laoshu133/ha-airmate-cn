@@ -40,7 +40,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class AirMateSensor(BaseEntity, SensorEntity):
     def __init__(self, coordinator, description) -> None:
-        super().__init__(coordinator, f"reported_{description.key}")
+        super().__init__(
+            coordinator,
+            f"reported_{description.key}",
+            state_keys={description.key},
+        )
         self.entity_description = description
         # Use the translated description name instead of the main entity name.
         del self._attr_name

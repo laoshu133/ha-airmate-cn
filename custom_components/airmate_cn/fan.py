@@ -25,6 +25,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class AirMateFan(BaseEntity, FanEntity):
+    _airmate_state_keys = frozenset(
+        {"power_switch", "downshift", "horizontal_swing"}
+    )
     _attr_supported_features = (
         FanEntityFeature.TURN_ON
         | FanEntityFeature.TURN_OFF
