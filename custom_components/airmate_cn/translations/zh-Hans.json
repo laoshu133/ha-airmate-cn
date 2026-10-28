@@ -21,6 +21,19 @@
       "already_configured": "此设备已配置。"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AirMate 设置",
+        "description": "修改显示名称或 MQTT 主题身份。",
+        "data": {
+          "name": "名称",
+          "product_id": "产品 ID",
+          "device_id": "设备 ID"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "downshift": {

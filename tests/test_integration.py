@@ -17,7 +17,10 @@ from custom_components.airmate_cn import (
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.airmate_cn.config_flow import AirMateConfigFlow
+from custom_components.airmate_cn.config_flow import (
+    AirMateConfigFlow,
+    AirMateOptionsFlow,
+)
 from custom_components.airmate_cn.coordinator import Coordinator
 from custom_components.airmate_cn.diagnostics import async_get_config_entry_diagnostics
 from custom_components.airmate_cn.fan import AirMateFan
@@ -340,6 +343,28 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                     "device_id": "testdevice",
                 }
             )
+
+    async def test_options_flow_updates_name_and_identity(self):
+        with patch("homeassistant.config_entries.report_usage"):
+            options = AirMateOptionsFlow(self.entry)
+        options.hass = self.hass
+        options.handler = self.entry.entry_id
+        result = await options.async_step_init()
+        self.assertEqual(result["type"], "form")
+        result = await options.async_step_init(
+            {
+                "name": "循环扇",
+                "product_id": "newproduct",
+                "device_id": "newdevice",
+            }
+        )
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(self.entry.title, "循环扇")
+        self.assertEqual(
+            self.entry.data,
+            {"product_id": "newproduct", "device_id": "newdevice"},
+        )
+        self.assertEqual(self.entry.unique_id, "newproduct/newdevice")
 
     async def test_speed_preparation_then_fresh_confirmation(self):
         self.report({"power_switch": 1, "mode": 0, "downshift": 11})

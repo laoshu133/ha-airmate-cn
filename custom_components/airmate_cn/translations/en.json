@@ -21,6 +21,19 @@
       "already_configured": "This device is already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AirMate settings",
+        "description": "Change the display name or MQTT topic identity.",
+        "data": {
+          "name": "Name",
+          "product_id": "Product ID",
+          "device_id": "Device ID"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "downshift": {

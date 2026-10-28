@@ -22,12 +22,17 @@ async def async_setup_entry(hass, entry: AirMateConfigEntry) -> bool:
     coordinator = entry.runtime_data = Coordinator(hass, entry)
     await coordinator.async_start()
     entry.async_on_unload(coordinator.async_close)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except BaseException:
         coordinator.async_close()
         raise
     return True
+
+
+async def _async_update_listener(hass, entry: AirMateConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass, entry: AirMateConfigEntry) -> bool:
