@@ -22,6 +22,7 @@ from .const import (
 from .protocol import LIMITS, Protocol
 
 _LOGGER = logging.getLogger(__name__)
+# The device applies the staged downshift asynchronously before the final write.
 SPEED_PREPARE_DELAY = 1.0
 SPEED_COALESCE_DELAY = 0.35
 
@@ -197,20 +198,40 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
         """Debounce and execute the latest speed request only once."""
         task = asyncio.current_task()
         waiter = self._speed_waiter
+        previous_data: dict[str, int] | None = None
         try:
             await asyncio.sleep(SPEED_COALESCE_DELAY)
             speed = self._speed_target
             if speed is None:
                 return
             self._speed_target = None
+            previous_data = dict(self.data)
+
+            def mark_optimistic() -> None:
+                """Show the target as soon as the final MQTT command is accepted."""
+                self.async_set_updated_data(
+                    {
+                        **self.data,
+                        "power_switch": 1,
+                        "mode": 0,
+                        "downshift": speed,
+                    }
+                )
+                if waiter is not None and not waiter.done():
+                    waiter.set_result(None)
+
             await self._async_command(
                 {"power_switch": 1, "mode": 0, "downshift": speed},
                 {"downshift": speed},
                 prelude={"downshift": speed},
+                on_published=mark_optimistic,
             )
         except asyncio.CancelledError:
             raise
         except Exception as err:
+            if previous_data is not None:
+                self.async_set_updated_data(previous_data)
+            _LOGGER.warning("Optimistic AirMate speed command failed: %s", err)
             if waiter is not None and not waiter.done():
                 waiter.set_exception(err)
         else:
@@ -239,11 +260,15 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
                 "AirMate device is unavailable; wait for a fresh report"
             )
 
-    async def _async_command(self, data, required, *, prelude=None) -> None:
+    async def _async_command(
+        self, data, required, *, prelude=None, on_published=None
+    ) -> None:
         """Serialize the complete transaction and confirm new matching properties.
 
         This firmware needs a speed preparation message before the full legacy
-        command. That is a protocol step, not a timeout retry. No stage is repeated.
+        command. The delay lets the device apply that staged value; it is a device
+        sequencing requirement, not network latency or a timeout retry. No stage
+        is repeated.
         """
         async with self._lock:
             self.protocol.validate_properties(data)  # Validate even a no-op.
@@ -283,6 +308,8 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
                         qos=0,
                         retain=False,
                     )
+                    if on_published is not None:
+                        on_published()
                     await future
             except TimeoutError as exc:
                 raise HomeAssistantError(

@@ -427,8 +427,10 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                 {"downshift": 10}
             )  # Before final publish, not its confirmation.
             await asyncio.sleep(0.02)
-            self.assertFalse(task.done())
             self.assertEqual(self.publish.await_count, 2)
+            self.assertTrue(task.done())
+            task.result()
+            worker = self.coordinator._speed_task
             first, final = [
                 json.loads(call.args[2]) for call in self.publish.call_args_list
             ]
@@ -436,8 +438,9 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                 final["data"], {"power_switch": 1, "mode": 0, "downshift": 10}
             )
             self.assertGreater(int(final["timestamp"]), int(first["timestamp"]))
+            self.assertEqual(self.coordinator.data["downshift"], 10)
             self.report({"downshift": 10})
-            await task
+            await worker
         self.assertTrue(
             all(
                 call.kwargs == {"qos": 0, "retain": False}
@@ -479,9 +482,11 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.report({"downshift": 10})
             self.report({"power_switch": 1})
             await self.tick()
-            self.assertFalse(task.done())
+            self.assertTrue(task.done())
+            task.result()
+            worker = self.coordinator._speed_task
             self.report({"mode": 0})
-            await task
+            await worker
 
     async def test_disconnect_during_speed_preparation_stops_final_publish(self):
         self.report({"downshift": 11})
@@ -503,8 +508,11 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
             patch("custom_components.airmate_cn.coordinator.SPEED_PREPARE_DELAY", 0),
             patch("custom_components.airmate_cn.coordinator.COMMAND_TIMEOUT", 0.02),
         ):
-            with self.assertRaises(HomeAssistantError):
-                await self.coordinator.async_set_speed(10)
+            task = asyncio.create_task(self.coordinator.async_set_speed(10))
+            await asyncio.sleep(0.005)
+            worker = self.coordinator._speed_task
+            await task
+            await worker
         self.assertEqual(self.publish.await_count, 2)
         self.assertEqual(self.coordinator.data["downshift"], 11)
 
