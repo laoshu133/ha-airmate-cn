@@ -23,6 +23,7 @@ from .protocol import LIMITS, Protocol
 
 _LOGGER = logging.getLogger(__name__)
 SPEED_PREPARE_DELAY = 1.0
+SPEED_COALESCE_DELAY = 0.35
 
 
 class Coordinator(DataUpdateCoordinator[dict[str, int]]):
@@ -48,6 +49,9 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
         self._pending: tuple[dict[str, int], dict[str, int], asyncio.Future] | None = (
             None
         )
+        self._speed_task: asyncio.Task | None = None
+        self._speed_target: int | None = None
+        self._speed_waiter: asyncio.Future | None = None
         self._epoch = 0
         self._state_store = Store(
             hass, 1, f"{DOMAIN}.{entry.entry_id}", private=True
@@ -166,11 +170,55 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
         await self._async_command({"power_switch": power}, {"power_switch": power})
 
     async def async_set_speed(self, speed: int) -> None:
-        await self._async_command(
-            {"power_switch": 1, "mode": 0, "downshift": speed},
-            {"downshift": speed},
-            prelude={"downshift": speed},
+        """Apply only the latest speed requested during a slider gesture."""
+        self.protocol.validate_properties({"downshift": speed})
+        self._check_available()
+
+        if self._speed_waiter is not None and not self._speed_waiter.done():
+            # Intermediate HomeKit slider values are superseded by the latest one.
+            self._speed_waiter.set_result(None)
+        self._speed_waiter = self.hass.loop.create_future()
+        self._speed_target = speed
+
+        if self._speed_task is not None and not self._speed_task.done():
+            self._speed_task.cancel()
+        self._speed_task = self.hass.async_create_task(
+            self._async_run_latest_speed(), "airmate latest speed"
         )
+        waiter = self._speed_waiter
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            if not waiter.done():
+                waiter.cancel()
+            raise
+
+    async def _async_run_latest_speed(self) -> None:
+        """Debounce and execute the latest speed request only once."""
+        task = asyncio.current_task()
+        waiter = self._speed_waiter
+        try:
+            await asyncio.sleep(SPEED_COALESCE_DELAY)
+            speed = self._speed_target
+            if speed is None:
+                return
+            self._speed_target = None
+            await self._async_command(
+                {"power_switch": 1, "mode": 0, "downshift": speed},
+                {"downshift": speed},
+                prelude={"downshift": speed},
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            if waiter is not None and not waiter.done():
+                waiter.set_exception(err)
+        else:
+            if waiter is not None and not waiter.done():
+                waiter.set_result(None)
+        finally:
+            if self._speed_task is task:
+                self._speed_task = None
 
     async def async_set_horizontal(self, value: int) -> None:
         await self._async_command(
@@ -256,6 +304,13 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
         """Idempotently release subscriptions, timer and in-flight commands."""
         self._closed = True
         self._connected = False
+        if self._speed_waiter is not None and not self._speed_waiter.done():
+            self._speed_waiter.set_exception(
+                HomeAssistantError("AirMate integration was unloaded")
+            )
+        if self._speed_task is not None:
+            self._speed_task.cancel()
+            self._speed_task = None
         if self._expiry is not None:
             self._expiry.cancel()
             self._expiry = None

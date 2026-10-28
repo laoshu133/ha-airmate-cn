@@ -72,6 +72,10 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                 "custom_components.airmate_cn.coordinator.mqtt.async_publish",
                 self.publish,
             ),
+            patch(
+                "custom_components.airmate_cn.coordinator.SPEED_COALESCE_DELAY",
+                0,
+            ),
         ]
         for item in self.patches:
             item.start()
@@ -440,6 +444,31 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                 for call in self.publish.call_args_list
             )
         )
+
+    async def test_speed_requests_coalesce_to_latest(self):
+        self.report({"power_switch": 1, "mode": 0, "downshift": 11})
+        with (
+            patch(
+                "custom_components.airmate_cn.coordinator.SPEED_COALESCE_DELAY", 0.05
+            ),
+            patch("custom_components.airmate_cn.coordinator.SPEED_PREPARE_DELAY", 0),
+        ):
+            first = asyncio.create_task(self.coordinator.async_set_speed(10))
+            await self.tick()
+            second = asyncio.create_task(self.coordinator.async_set_speed(20))
+            await first
+            await asyncio.sleep(0.06)
+            self.assertEqual(self.publish.await_count, 2)
+            first_payload, final_payload = [
+                json.loads(call.args[2]) for call in self.publish.call_args_list
+            ]
+            self.assertEqual(first_payload["data"], {"downshift": 20})
+            self.assertEqual(
+                final_payload["data"],
+                {"power_switch": 1, "mode": 0, "downshift": 20},
+            )
+            self.report({"downshift": 20})
+            await second
 
     async def test_speed_requires_all_known_changed_fields(self):
         self.report({"power_switch": 0, "mode": 1, "downshift": 11})
