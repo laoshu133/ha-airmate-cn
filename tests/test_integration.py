@@ -117,6 +117,40 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.report({"downshift": 20}, retain=True)
         self.assertEqual(self.coordinator.data["downshift"], 11)
 
+    async def test_last_known_state_is_restored(self):
+        self.report(
+            {
+                "power_switch": 1,
+                "downshift": 11,
+                "horizontal_swing": 3,
+                "vertical_swing": 1,
+            }
+        )
+        await asyncio.sleep(0.2)
+        await self.hass.async_block_till_done()
+        self.coordinator.async_close()
+
+        restored = Coordinator(self.hass, self.entry)
+        self.entry.runtime_data = restored
+        await restored.async_start()
+        self.assertFalse(restored.online)
+        self.assertEqual(
+            restored.data,
+            {
+                "power_switch": 1,
+                "downshift": 11,
+                "horizontal_swing": 3,
+                "vertical_swing": 1,
+            },
+        )
+        restored_fan = AirMateFan(restored)
+        self.assertTrue(restored_fan.available)
+        self.assertEqual(
+            restored_fan.extra_state_attributes, {"state_source": "last_known"}
+        )
+        restored.async_close()
+        self.coordinator = restored
+
     async def test_publish_and_new_report_required(self):
         self.report({"power_switch": 0, "downshift": 11})
         task = asyncio.create_task(self.coordinator.async_set_power(1))
@@ -168,7 +202,7 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.report({"power_switch": 0})
         await second
 
-    async def test_disconnect_clears_cached_fields_and_fails_pending(self):
+    async def test_disconnect_keeps_cached_fields_and_fails_pending(self):
         self.report({"power_switch": 0, "downshift": 11})
         task = asyncio.create_task(self.coordinator.async_set_power(1))
         await self.tick()
@@ -180,17 +214,17 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.coordinator.online)
         self.report({"downshift": 11})
         self.assertTrue(self.coordinator.online)
-        self.assertNotIn("power_switch", self.coordinator.data)
+        self.assertEqual(self.coordinator.data["power_switch"], 0)
 
     async def test_stale_then_partial_recovery(self):
         self.coordinator.stale_timeout = 0.01
         self.report({"power_switch": 1})
         await asyncio.sleep(0.02)
         self.assertFalse(self.coordinator.online)
-        self.assertEqual(self.coordinator.data, {})
+        self.assertEqual(self.coordinator.data, {"power_switch": 1})
         self.report({"downshift": 11})
         self.assertTrue(self.coordinator.online)
-        self.assertNotIn("power_switch", self.coordinator.data)
+        self.assertEqual(self.coordinator.data["power_switch"], 1)
 
     async def test_close_cancels_waiters_and_unsubscribes_once(self):
         self.report({"power_switch": 0})

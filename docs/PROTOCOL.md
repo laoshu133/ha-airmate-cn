@@ -2,7 +2,7 @@
 
 ## 主题与消息
 
-设备上行：`<product_id>/<device_id>/data`；设备订阅下行：`<product_id>/<device_id>/rrpc`。消息使用 MQTT QoS 0、非 retained JSON。状态消息的 `data` 可以只包含变化字段，集成必须增量合并。
+设备上行：`<product_id>/<device_id>/data`；设备订阅下行：`<product_id>/<device_id>/rrpc`。消息使用 MQTT QoS 0、非 retained JSON。状态消息的 `data` 可以只包含变化字段，集成必须增量合并，并在 HA 存储中保存最近一次已知值。恢复值只用于显示，不会被当作实时在线状态或命令确认。
 
 ## 字段映射
 

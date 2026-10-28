@@ -8,6 +8,7 @@ import logging
 from homeassistant.components import mqtt
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -18,7 +19,7 @@ from .const import (
     DEFAULT_STALE_TIMEOUT,
     DOMAIN,
 )
-from .protocol import Protocol
+from .protocol import LIMITS, Protocol
 
 _LOGGER = logging.getLogger(__name__)
 SPEED_PREPARE_DELAY = 1.0
@@ -48,9 +49,13 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
             None
         )
         self._epoch = 0
+        self._state_store = Store(
+            hass, 1, f"{DOMAIN}.{entry.entry_id}", private=True
+        )
 
     async def async_start(self) -> None:
-        """Register listeners before entities are added; no cloud refresh."""
+        """Restore the last report, then register listeners before entities are added."""
+        await self._async_restore_state()
         self._connected = mqtt.is_connected(self.hass)
         self._unsubs.append(
             mqtt.async_subscribe_connection_status(self.hass, self._connection_changed)
@@ -68,6 +73,45 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
             self.async_close()
             raise
 
+    async def _async_restore_state(self) -> None:
+        """Restore validated properties for display until a fresh report arrives."""
+        try:
+            stored = await self._state_store.async_load()
+        except Exception as err:  # pragma: no cover - defensive storage handling
+            _LOGGER.warning("Unable to restore AirMate state: %s", err)
+            return
+        if not isinstance(stored, dict):
+            return
+        if (
+            stored.get("product_id") != self.protocol.product_id
+            or stored.get("device_id") != self.protocol.device_id
+        ):
+            return
+        properties = stored.get("properties")
+        if isinstance(properties, dict):
+            self.data = {
+                key: value
+                for key, value in properties.items()
+                if key in LIMITS
+                and type(value) is int
+                and LIMITS[key][0] <= value <= LIMITS[key][1]
+            }
+        firmware = stored.get("firmware")
+        if isinstance(firmware, str) and 0 < len(firmware) <= 64:
+            self.firmware = firmware
+
+    def _async_save_state(self) -> None:
+        """Persist the latest validated report without blocking MQTT callbacks."""
+        self._state_store.async_delay_save(
+            lambda: {
+                "product_id": self.protocol.product_id,
+                "device_id": self.protocol.device_id,
+                "properties": dict(self.data),
+                "firmware": self.firmware,
+            },
+            delay=0.1,
+        )
+
     @callback
     def _receive(self, message) -> None:
         if self._closed or not self._connected:
@@ -84,6 +128,7 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
             self._expiry.cancel()
         self._expiry = self.hass.loop.call_later(self.stale_timeout, self._expire)
         self.async_set_updated_data({**self.data, **report.properties})
+        self._async_save_state()
         if self._pending is not None:
             expected, seen, future = self._pending
             seen.update(report.properties)
@@ -103,8 +148,8 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
         self._expiry = None
         self._epoch += 1
         self.online = False
-        # A new partial report must not resurrect stale power/mode/swing values.
-        self.async_set_updated_data({})
+        # Keep the last known values for display; commands still require online=True.
+        self.async_set_updated_data(dict(self.data))
         self._fail_pending("AirMate device stopped reporting")
 
     @callback

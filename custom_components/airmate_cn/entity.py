@@ -30,4 +30,12 @@ class BaseEntity(CoordinatorEntity[Coordinator]):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.online
+        # Keep the last validated values visible while MQTT is offline. Commands
+        # still require a live report and are rejected by the coordinator.
+        return self.coordinator.online or bool(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool] | None:
+        if self.coordinator.data and not self.coordinator.online:
+            return {"state_source": "last_known"}
+        return None
