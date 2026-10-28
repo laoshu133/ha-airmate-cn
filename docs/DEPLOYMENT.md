@@ -1,25 +1,10 @@
-# 部署与迁移指南
+# 部署指南
 
-本文面向公开仓库使用者，所有地址、账号、产品 ID 和设备 ID 都是占位符。
-项目本身只提供 Home Assistant 集成；MQTT broker 必须单独部署。
+本项目只提供 Home Assistant 集成；MQTT broker 需要单独运行。Home Assistant Container 没有 Mosquitto add-on，HA 的 MQTT 集成只是客户端。HA OS 用户可以使用 Mosquitto add-on，其他部署可使用 Docker Compose 或系统服务。
 
-## 架构
+## 1. Broker
 
-```text
-风扇 -- TCP 3866 / MQTT --> Mosquitto broker <-- MQTT 集成 -- Home Assistant
-          原固件域名解析到 broker 主机
-```
-
-Home Assistant Container 没有 Mosquitto add-on。HA 的 MQTT 集成只负责连接 broker、订阅状态和发布命令。
-如果使用 HA OS，可以使用 Mosquitto add-on；如果使用 HA Container，应通过 Docker Compose、系统服务或独立主机运行 Mosquitto。
-
-## 1. 部署 broker
-
-选择一台与风扇在同一局域网的主机，安装 Mosquitto 2.x。让主机的 TCP 3866 映射到 Mosquitto 的 1883：
-
-Mosquitto 对单个或少量设备的资源占用通常很小；本项目的单设备调试容器实测约占 1.5 MiB 内存。
-实际占用会随连接数、日志和持久化消息增加。为了只开放设备需要的入口，可以让宿主机只发布
-3866，容器内部仍使用标准 MQTT 1883。
+在与风扇同一局域网的主机运行 Mosquitto 2.x。将宿主机 TCP 3866 映射到 broker 的 MQTT 1883：
 
 ```yaml
 services:
@@ -34,7 +19,7 @@ services:
       - ./broker-private:/mosquitto/private:ro
 ```
 
-示例 `mosquitto.conf`：
+配置至少包含：
 
 ```conf
 listener 1883
@@ -45,119 +30,35 @@ persistence true
 persistence_location /mosquitto/data/
 ```
 
-设备账号和 HA 账号应分开。设备账号只能发布状态主题、订阅命令主题；HA 账号只能订阅状态主题、发布命令主题：
+设备账号只能写 `<product_id>/<device_id>/data`、读 `.../rrpc`；HA 账号只能读 `.../data`、写 `.../rrpc`。使用 `mosquitto_passwd` 创建密码文件，密码和 ACL 不要提交仓库。
 
-```text
-user <device-username>
-topic write <product_id>/<device_id>/data
-topic read <product_id>/<device_id>/rrpc
+## 2. DNS 与端口
 
-user <ha-username>
-topic read <product_id>/<device_id>/data
-topic write <product_id>/<device_id>/rrpc
-```
+将风扇固件内置的服务器域名精确解析到 broker 主机的局域网地址，不要解析到 `127.0.0.1`。风扇的已验证业务连接是 TCP 3866；旧集成访问原厂 HTTPS API 属于 HA 到云端的流量，不能据此推断风扇访问 80/443。不要把 3866 暴露到公网，并确保没有其他代理或 fake-IP 规则抢先接管连接。
 
-使用 `mosquitto_passwd` 创建密码文件，并将密码文件和 ACL 限制为 broker 进程可读。不要提交这两个文件。
+## 3. 设备身份
 
-## 2. 接管设备解析
-
-设备固件仍会访问其内置服务器域名。需要在你自己的 DNS 设备上，将该域名精确解析到 broker 主机的局域网 IP。
-本项目不要求修改固件，也不要求把域名改成新域名。
-
-确认以下条件：
-
-- 风扇能解析到 broker 主机，而不是 `127.0.0.1`。
-- broker 主机允许局域网风扇访问 TCP 3866。
-- 没有其他透明代理、fake-IP 规则或端口转发抢先接管该连接。
-- 3866 不暴露到公网。
-
-目前已观察到的设备业务连接只有 `xiot.zhidekan.tv:3866` 的明文 MQTT TCP 连接。
-旧版本插件访问 `api-life.worthcloud.net` 等 HTTPS 地址，是 Home Assistant 到原厂云的请求，
-不能推断风扇本身会访问这些 HTTPS 地址。当前没有风扇访问 80/443 的证据；如果需要确认某个固件版本，
-应在该设备运行期间被动抓包观察，而不是根据旧插件的 HTTP 实现推断。
-此前对少量常见端口的检查没有发现监听，但这不是完整端口扫描；不要据此断言所有固件版本都没有其他流量。
-可以在 broker 主机上只允许风扇来源访问 TCP 3866，其余入站端口由宿主机防火墙拒绝或丢弃。
-DNS 查询本身仍需要设备能够访问它配置的 DNS 服务器，通常使用 UDP 53，必要时可能回退 TCP 53；
-这不是 broker 需要监听的端口。
-
-设备固定使用 3866 的原因是固件中的 MQTT 服务器端口固定为该值。Mosquitto 不必直接监听 3866：
-也可以使用 `3866:1883` 端口映射，或由 TCP 代理把 3866 转到内部 broker。映射只改变监听位置，
-不能省略 MQTT broker。
-
-## 3. 获取设备身份
-
-设备状态主题格式为：
-
-```text
-<product_id>/<device_id>/data
-```
-
-下行命令主题格式为：
-
-```text
-<product_id>/<device_id>/rrpc
-```
-
-`product_id` 和 `device_id` 来自状态消息及主题。它们与 MQTT client ID、username、password 不同。
-首次接入时，如果尚不知道主题，可以临时使用权限受限的只读客户端订阅 `#`，记录设备发布的主题，
-随后立即收紧 ACL 到该设备的精确主题。也可以从 broker 连接日志或一条上报 JSON 中取得这两个 ID。
-原始 CONNECT、密码和真实 payload 只能保存在本地私有目录。
-
-仓库提供了一个不依赖第三方 Python 包的发现脚本：
+状态主题为 `<product_id>/<device_id>/data`，命令主题为 `<product_id>/<device_id>/rrpc`。首次接入可临时给观察账号 `#` 的读取权限，使用发现脚本读取第一条有效状态后立即删除通配符权限：
 
 ```bash
-python3 tools/discover_device.py \
-  --host <broker-host> \
-  --port 3866 \
-  --username <temporary-observer-user>
+python3 tools/discover_device.py --host <broker-host> --port 3866 --username <observer>
 ```
 
-脚本使用交互式密码输入，默认观察 90 秒，发现第一条有效 `data` 消息后只输出主题、product ID 和 device ID。
-它不会输出完整 payload。观察账号必须临时拥有 `#` 读取权限；发现后立即删除该权限并收紧 ACL。
+脚本只输出主题、产品 ID 和设备 ID，不输出完整 payload。
 
-## 4. 配置 Home Assistant
+## 4. Home Assistant
 
-1. 在设置中添加 MQTT 集成，填写 broker 主机、端口 3866、HA 账号和密码。
-2. 添加 AirMate CN 集成。
-3. 输入名称、product ID 和 device ID。
-4. 等待设备上报。
+1. 在设置中添加 MQTT 集成，填写 broker 主机、3866 端口和 HA 账号。
+2. 安装并添加 AirMate CN，填写名称、产品 ID 和设备 ID。
+3. 等待设备上报。
 
-集成 manifest 声明了 Home Assistant 的 `mqtt` 集成依赖，因此 Home Assistant 会按依赖顺序加载它。
-MQTT 集成是 Home Assistant 自带的集成，不需要另行下载；但这不会安装 Mosquitto，也不会自动创建 MQTT 配置条目：
-broker 地址、端口和账号密码必须由使用者配置。
-当前配置流程在没有已启用 MQTT 条目时会提示先添加 MQTT。
+manifest 的 `mqtt` 依赖只控制内置集成的加载顺序，不会安装 Mosquitto，也不会自动创建 MQTT 配置。
 
-成功后会创建：
+## 5. 故障排查
 
-- 风扇实体：开关、32 档调速、水平摇头。
-- 水平摇头角度选择器：关闭、30°、60°、90°。
-- 垂直摇头开关。
-- 六个状态传感器，包括档位、模式、水平/垂直摇头、灯光和静音。
+- 没有实体：确认 MQTT 已配置，且 ID 来自目标设备主题。
+- 实体不可用：检查 DNS、TCP 3866、broker ACL 和设备上报。
+- 命令超时：确认设备在线、命令主题正确且没有 retained 旧命令。
+- 状态 unknown：设备可能只上报部分字段，等待后续增量消息。
 
-命令使用 QoS 0、retain=false。集成不会把发送成功当作设备成功，而是等待新的匹配属性上报。
-调速先发送目标档位，再等待约 1 秒发送完整的开机/标准风/档位组合；中间断连会终止本次操作。
-
-## 5. 迁移旧云版本
-
-旧版本需要原厂账号；本版本一个配置条目对应一台设备。升级时：
-
-1. 备份 Home Assistant 配置和自动化。
-2. 记录旧实体 ID。
-3. 删除旧 AirMate 云条目。
-4. 按本指南配置 MQTT 和本地 AirMate 条目。
-5. 检查自动化中的实体 ID、调速百分比和水平角度选项。
-
-集成不会把缺少 MQTT 身份的旧云条目静默转换成本地条目。
-
-## 6. 故障排查
-
-- 没有实体：检查 MQTT 集成是否已加载、product/device ID 是否来自目标主题。
-- 实体 unavailable：检查 broker 连接、DNS、TCP 3866 和设备是否在上报。
-- 调速超时：检查设备是否在线；确认 broker 没有保留旧命令；等待设备新上报后重试。
-- 状态 unknown：设备重连后可能只发送部分字段，等待后续完整或增量状态。
-- 设备连接不上：检查 DNS 是否解析到 broker 主机，检查是否存在其他 fake-IP/代理规则。
-
-## 7. 安全与隐私
-
-不要公开设备 MQTT 密码、CONNECT 报文、client ID、真实主题、IP、MAC、抓包或生产 ACL。
-不要把 broker 端口暴露到公网。调试完成后删除宽泛 ACL，只保留该设备的精确主题权限。
+不要公开设备密码、CONNECT 报文、真实主题、IP、MAC、抓包或生产 ACL。

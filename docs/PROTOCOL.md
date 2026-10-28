@@ -1,57 +1,20 @@
-# 本地协议实验证据
+# 本地 MQTT 协议
 
-更新：2026-10-27，调速与摇头控制已接入，并通过真实HA服务验证。
+## 主题与消息
 
-## 旧实现对照
+设备上行：`<product_id>/<device_id>/data`；设备订阅下行：`<product_id>/<device_id>/rrpc`。消息使用 MQTT QoS 0、非 retained JSON。状态消息的 `data` 可以只包含变化字段，集成必须增量合并。
 
-来源为原始 Git HEAD `b2a08ea` 的 fan.py、select.py、switch.py 与 api.py。
+## 字段映射
 
-| 字段 | 旧代码取值与行为 | 实验前掌握的状态 |
-| --- | --- | --- |
-| power_switch | 0 关闭、1 开启 | 已通过实际 MQTT 和 HA 服务复核 |
-| downshift | 1–32；旧调速同时发 power=1、mode=0 | 单独发送未收到目标档位 |
-| mode | 0 标准风、1 婴儿风、2 暴风 | 历史完整上报为 0 |
-| horizontal_swing | 0 关闭、1 开启、2=30°、3=60°、4=90° | 历史完整上报为 2 |
-| vertical_swing | 0 关闭、1 开启 | 历史完整上报为 0 |
+| 字段 | 值 |
+| --- | --- |
+| `power_switch` | 0 关闭，1 开启 |
+| `downshift` | 1–32 档 |
+| `mode` | 0 标准风，1 婴儿风，2 暴风（只读） |
+| `horizontal_swing` | 0 关闭，2/3/4 为 30°/60°/90° |
+| `vertical_swing` | 0/1 关闭/开启 |
+| `mute`、`light`、`wind_mode`、`failure`、`filter_life` | 设备状态（只读） |
 
-这些源码是旧云端接口的字段定义，不自动等同于新 MQTT 写入已验证。
-用户当前不在风扇前，继续实验使用最后已知恢复参考，并单独记录每项新上报。
-恢复参考：开机、11档、标准风、水平30°、垂直关闭；不把它标成当前全量读取。
+控制消息使用 `command=300013`、`method=thing.property.update`、设备 ID、毫秒时间戳和唯一 `msg_id`。开关直接写 `power_switch`。调速先写目标 `downshift`，等待约 1 秒，再写 `power_switch=1, mode=0, downshift=目标`；仅最终步骤后的新上报用于确认。水平摇头写 0/2/3/4，垂直摇头写 0/1。
 
-## 调速实验过程与结论
-
-1. `power_switch=1, mode=0, downshift=10` 首先回报旧值11。
-2. 发送相同组合恢复11后，反而回报10。
-3. 单独再发送power=1仍回报10。
-4. 再次发送完整恢复11组合后，新回报为11。
-
-这说明旧调速实验的“未确认”不能直接视为不生效。随后测试了字段顺序、单独mode与单独power刷新，
-都没有形成可靠的单步方案。最终采用下述可重复通过的两步流程。
-新11档回报已取得。证据在私有 `本地私有调试目录/control-legacy-speed-full.jsonl`、
-`control-confirm-speed-restore.jsonl`、`control-repeat-restore-speed11.jsonl`。
-
-## 最终发送流程
-
-调速：先发布 `data={"downshift":目标档位}`，等待1秒，再发布
-`data={"power_switch":1,"mode":0,"downshift":目标档位}`。
-两条消息都使用command300013、method thing.property.update，QoS0、retain=false、各自新的msg_id。
-准备步骤不等待属性确认；只用最终步骤之后的目标档位新上报确认整次调速。
-已知电源或mode确实需要改变时，也要求那些字段的新回报，防止部分成功冒充完整成功。
-
-`control-speed-stage-apply.jsonl` 连续11→10→12→11全部通过，最终步骤后约0.7–0.9秒得到匹配回报。
-真实HA也通过31%→10、37%→12、34%→11。这里确认的是可用的发送流程，
-“固件缓存/字段应用次序”仍是推测，没有固件或UART层证据。
-
-水平摇头单独发送horizontal_swing即可。0/2/3/4均有匹配回报；1没有得到目标回报，
-不开放写入。垂直摇头单独发送vertical_swing=0/1，均有匹配回报。
-风扇实体的oscillate=true沿用旧项目默认60°（3），false为0；角度select另提供30/60/90°。
-
-## 状态与恢复边界
-
-最终新回报确认电源1、档位11、水平2、垂直0。调速下发mode0，但本轮未取得新的mode字段；
-模式仍应按历史标准风参考理解，不能把发送mode0本身当成模式回报。实体不会乐观填充mode。
-机械转速/角度未由助手目视测量，用户返回后按ACCEPTANCE.md一并验收。
-
-## 上下文核对
-
-实验判断以原始代码和本轮实际报文为准。
+主动 `thing.property.get`、模式/灯光/静音写入以及两步调速的固件内部原因尚未确认。
