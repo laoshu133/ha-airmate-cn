@@ -9,7 +9,7 @@
 - 设备使用明文 MQTT 3.1.1，固定 TCP 3866，状态主题为 `<product_id>/<device_id>/data`，命令主题为 `.../rrpc`。
 - 状态消息为 JSON，可为完整或增量属性；缺失字段必须保留已有值或 unknown。
 - 已确认字段：`power_switch`、`downshift`（1–32）、`mode`、`horizontal_swing`（0/2/3/4）、`vertical_swing`（0/1）、`mute`、`light`、`wind_mode`、`failure`、`filter_life`。
-- 开关、调速、水平摇头和垂直摇头已在真实设备与 HA 2026.10.2 中验证。调速使用先发 `downshift`、间隔约 1 秒再发 `power_switch=1,mode=0,downshift` 的两步流程。
+- 开关、调速、水平摇头和垂直摇头已在真实设备与 HA 2026.10.2 中验证。调速使用先发 `downshift`、间隔约 10 ms 再发 `power_switch=1,mode=0,downshift` 的两步流程；实测 0 ms 会失败，10 ms 可稳定工作。
 
 ## 集成结构
 

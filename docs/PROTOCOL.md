@@ -15,6 +15,6 @@
 | `vertical_swing` | 0/1 关闭/开启 |
 | `mute`、`light`、`wind_mode`、`failure`、`filter_life` | 设备状态（只读） |
 
-控制消息使用 `command=300013`、`method=thing.property.update`、设备 ID、毫秒时间戳和唯一 `msg_id`。开关直接写 `power_switch`。调速先写目标 `downshift`，等待约 1 秒，再写 `power_switch=1, mode=0, downshift=目标`；连续请求会在短暂窗口内合并，只执行最后目标；最终命令发出后先乐观显示目标，后台等待新上报并在失败时恢复旧值。水平摇头写 0/2/3/4，垂直摇头写 0/1。
+控制消息使用 `command=300013`、`method=thing.property.update`、设备 ID、毫秒时间戳和唯一 `msg_id`。开关直接写 `power_switch`。调速先写目标 `downshift`，等待约 10 ms，再写 `power_switch=1, mode=0, downshift=目标`；实测 0 ms 会失败，10 ms 可稳定工作。连续请求会在短暂窗口内合并，只执行最后目标；最终命令发出后先乐观显示目标，后台等待新上报并在失败时恢复旧值。水平摇头写 0/2/3/4，垂直摇头写 0/1。
 
 主动 `thing.property.get`、模式/灯光/静音写入以及两步调速的固件内部原因尚未确认。

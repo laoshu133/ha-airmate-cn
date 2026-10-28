@@ -22,8 +22,10 @@ from .const import (
 from .protocol import LIMITS, Protocol
 
 _LOGGER = logging.getLogger(__name__)
-# The device applies the staged downshift asynchronously before the final write.
-SPEED_PREPARE_DELAY = 1.0
+# The device needs the staged and final writes to arrive as separate MQTT
+# messages. A short yield is sufficient; a zero delay can be coalesced and is
+# rejected by the firmware, while longer waits add needless UI latency.
+SPEED_PREPARE_DELAY = 0.01
 SPEED_COALESCE_DELAY = 0.35
 
 
