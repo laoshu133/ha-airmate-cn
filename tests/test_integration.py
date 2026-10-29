@@ -441,6 +441,10 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.coordinator.data["downshift"], 10)
             self.report({"downshift": 10})
             await worker
+            await asyncio.sleep(0.2)
+            await self.hass.async_block_till_done()
+            stored = await self.coordinator._state_store.async_load()
+            self.assertEqual(stored["properties"]["mode"], 0)
         self.assertTrue(
             all(
                 call.kwargs == {"qos": 0, "retain": False}

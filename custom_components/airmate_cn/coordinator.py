@@ -219,6 +219,10 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
                         "downshift": speed,
                     }
                 )
+                # The final command explicitly selects normal mode. Persist
+                # that fact together with the optimistic state so an HA
+                # restart does not discard the only verified mode value.
+                self._async_save_state()
                 if waiter is not None and not waiter.done():
                     waiter.set_result(None)
 
