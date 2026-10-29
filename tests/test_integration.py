@@ -264,20 +264,23 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_entity_contracts_and_readonly_mappings(self):
         fan = AirMateFan(self.coordinator)
         self.assertEqual(fan.unique_id, "airmate_cn_fan_testdevice")
-        self.report({"power_switch": 1, "horizontal_swing": 1})
+        self.report({"power_switch": 1, "mode": 0, "downshift": 11, "horizontal_swing": 1})
         with patch.object(
             self.coordinator, "async_set_power", AsyncMock()
         ) as set_power:
             await fan.async_turn_on(percentage=0)
             set_power.assert_awaited_once_with(0)
-            with self.assertRaises(HomeAssistantError):
-                await fan.async_turn_on(preset_mode="baby")
+        with patch.object(self.coordinator, "async_set_mode", AsyncMock()) as set_mode:
+            await fan.async_turn_on(preset_mode="baby")
+            set_mode.assert_awaited_once_with(1)
+        self.assertEqual(fan.preset_mode, "normal")
+        self.assertEqual(fan.preset_modes, ["normal", "baby", "strong"])
         sensors = {d.key: AirMateSensor(self.coordinator, d) for d in DESCRIPTIONS}
         self.assertEqual(sensors["horizontal_swing"].native_value, "on")
         for value, expected in [(0, "off"), (2, "30°"), (3, "60°"), (4, "90°")]:
             self.report({"horizontal_swing": value})
             self.assertEqual(sensors["horizontal_swing"].native_value, expected)
-        self.assertIsNone(sensors["mode"].native_value)
+        self.assertEqual(sensors["mode"].native_value, "normal")
 
     async def test_diagnostics_redaction(self):
         self.report({"power_switch": 1})
@@ -356,6 +359,19 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         ):
             self.assertFalse(await async_unload_entry(self.hass, self.entry))
         self.assertFalse(self.coordinator._closed)
+
+    async def test_verified_mode_command_and_report(self):
+        fan = AirMateFan(self.coordinator)
+        self.report({"power_switch": 1, "mode": 0, "downshift": 11})
+        task = asyncio.create_task(fan.async_set_preset_mode("strong"))
+        await self.tick()
+        payload = json.loads(self.publish.call_args.args[2])
+        self.assertEqual(
+            payload["data"], {"power_switch": 1, "mode": 2, "downshift": 11}
+        )
+        self.report({"mode": 2})
+        await task
+        self.assertEqual(fan.preset_mode, "strong")
 
     async def test_retained_or_invalid_report_cannot_mark_online(self):
         self.report({"power_switch": 1}, retain=True)

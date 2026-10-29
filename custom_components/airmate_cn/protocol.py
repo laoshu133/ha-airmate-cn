@@ -1,6 +1,7 @@
 """Observed AirMate MQTT protocol, independent of Home Assistant.
 
-Power, staged speed and selected swing writes are verified; other properties remain read-only.
+Power, staged speed, mode and selected swing writes are verified; light and
+mute remain read-only until their device behavior is confirmed.
 """
 
 from __future__ import annotations
@@ -115,8 +116,8 @@ class Protocol:
             and data["horizontal_swing"] not in HORIZONTAL_CONTROL_OPTIONS
         ):
             raise ValueError("Generic swing value 1 is not verified")
-        if "mode" in data and (data["mode"] != 0 or data["power_switch"] != 1):
-            raise ValueError("Speed control requires power on and normal mode")
+        if "mode" in data and data["power_switch"] != 1:
+            raise ValueError("Mode control requires power on")
 
     def encode_properties(self, data: dict[str, int]) -> str:
         """Create a compact command with an ID in publication order."""

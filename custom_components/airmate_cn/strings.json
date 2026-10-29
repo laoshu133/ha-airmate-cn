@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Local MQTT fan",
-        "description": "Enter the product and device IDs from the device data topic. Configure MQTT first. Supports power, 32 speed levels, and horizontal/vertical swing. Changing speed selects normal mode.",
+        "description": "Enter the product and device IDs from the device data topic. Configure MQTT first. Supports power, 32 speed levels, three fan modes, and horizontal/vertical swing. Changing speed selects normal mode.",
         "data": {
           "name": "Name",
           "product_id": "Product ID",

@@ -196,6 +196,15 @@ class Coordinator(DataUpdateCoordinator[dict[str, int]]):
                 waiter.cancel()
             raise
 
+    async def async_set_mode(self, mode: int) -> None:
+        """Set a verified fan mode using the full device command shape."""
+        speed = self.data.get("downshift")
+        if speed is None:
+            raise HomeAssistantError("AirMate speed is unknown; wait for a fresh report")
+        data = {"power_switch": 1, "mode": mode, "downshift": speed}
+        self.protocol.validate_properties(data)
+        await self._async_command(data, {"mode": mode})
+
     async def _async_run_latest_speed(self) -> None:
         """Debounce and execute the latest speed request only once."""
         task = asyncio.current_task()

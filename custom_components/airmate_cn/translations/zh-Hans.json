@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "本地 MQTT 风扇",
-        "description": "填写设备 data 主题中的产品 ID 和设备 ID。需要先配置 MQTT 集成；支持开关、32 档调速与水平/垂直摇头。调速会切换到标准风。",
+        "description": "填写设备 data 主题中的产品 ID 和设备 ID。需要先配置 MQTT 集成；支持开关、32 档调速、三种风模式与水平/垂直摇头。调速会切换到标准风。",
         "data": {
           "name": "名称",
           "product_id": "产品 ID",

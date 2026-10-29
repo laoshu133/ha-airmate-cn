@@ -112,13 +112,15 @@ class ProtocolTests(unittest.TestCase):
             {"downshift": 33},
             {"vertical_swing": 2},
             {"power_switch": 0, "mode": 0, "downshift": 10},
-            {"power_switch": 1, "mode": 1, "downshift": 10},
+            {"power_switch": 0, "mode": 1, "downshift": 10},
         ]:
             with self.assertRaises(ValueError):
                 self.protocol.encode_properties(data)
         for data in [
             {"downshift": 10},
             {"power_switch": 1, "mode": 0, "downshift": 10},
+            {"power_switch": 1, "mode": 1, "downshift": 10},
+            {"power_switch": 1, "mode": 2, "downshift": 10},
             {"horizontal_swing": 4},
             {"vertical_swing": 1},
         ]:
