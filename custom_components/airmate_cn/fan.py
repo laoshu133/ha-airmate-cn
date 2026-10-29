@@ -1,17 +1,14 @@
-"""Verified power, staged speed, mode and horizontal oscillation control."""
+"""Verified power, staged speed and horizontal oscillation control."""
 
 import math
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
     ranged_value_to_percentage,
 )
 
 from .entity import BaseEntity
-from .protocol import MODE_OPTIONS
-
 SPEED_RANGE = (1, 32)
 
 
@@ -34,10 +31,8 @@ class AirMateFan(BaseEntity, FanEntity):
         | FanEntityFeature.TURN_OFF
         | FanEntityFeature.SET_SPEED
         | FanEntityFeature.OSCILLATE
-        | FanEntityFeature.PRESET_MODE
     )
     _attr_speed_count = 32
-    _attr_preset_modes = list(MODE_OPTIONS.values())
 
     @property
     def is_on(self) -> bool | None:
@@ -56,20 +51,7 @@ class AirMateFan(BaseEntity, FanEntity):
         value = self.coordinator.data.get("horizontal_swing")
         return None if value is None else value != 0
 
-    @property
-    def preset_mode(self) -> str | None:
-        return MODE_OPTIONS.get(self.coordinator.data.get("mode"))
-
-    async def async_turn_on(self, percentage=None, preset_mode=None, **kwargs) -> None:
-        if preset_mode is not None:
-            try:
-                mode = next(
-                    value for value, label in MODE_OPTIONS.items() if label == preset_mode
-                )
-            except StopIteration as err:
-                raise HomeAssistantError("Unsupported AirMate preset mode") from err
-            await self.coordinator.async_set_mode(mode)
-            return
+    async def async_turn_on(self, percentage=None, **kwargs) -> None:
         if percentage is not None:
             await self.async_set_percentage(percentage)
             return
@@ -83,9 +65,6 @@ class AirMateFan(BaseEntity, FanEntity):
             await self.async_turn_off()
             return
         await self.coordinator.async_set_speed(percentage_to_speed(percentage))
-
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
-        await self.async_turn_on(preset_mode=preset_mode)
 
     async def async_oscillate(self, oscillating: bool) -> None:
         await self.coordinator.async_set_horizontal(3 if oscillating else 0)
